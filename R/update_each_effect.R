@@ -15,7 +15,7 @@ update_each_effect <- function (X, Y, s, estimate_prior_variance=FALSE,
   if(L>0){
     for (l in 1:L){
       # remove lth effect from fitted values
-      s$Xr = s$Xr - compute_Xb(X, (s$alpha[l,] * s$mu[l,]))
+      s$Xr = s$Xr - compute_Xb(X, (s$beta[l] * s$alpha[l,] * s$mu[l,]))
       #compute residuals
       R = Y - s$Xr
 
@@ -29,12 +29,23 @@ update_each_effect <- function (X, Y, s, estimate_prior_variance=FALSE,
       s$V[l] <- res$V
       s$lbf[l] <- res$lbf_model
       s$KL[l] <- -res$loglik + SER_posterior_e_loglik(X,R,s$sigma2,res$alpha*res$mu,res$alpha*res$mu2)
+      s$beta[l] <- rho*activated_effect_susie_ann_likelihood(X, Y, s, l) / ((1-rho)*deactivated_effect_susie_ann_likelihood(X, Y, s, l) + rho * activated_effect_susie_ann_likelihood(X, Y, s))
 
-      s$Xr <- s$Xr + compute_Xb(X, (s$alpha[l,] * s$mu[l,]))
+      s$Xr <- s$Xr + compute_Xb(X, (s$beta[l] * s$alpha[l,] * s$mu[l,]))
     }
   }
 
   return(s)
 }
 
+#' @title Computes p(y | X, b, beta, prior_variance, residual_variance) approximately where effect l is always activated, that is, beta[l]=1
+activated_effect_susie_ann_likelihood <- function(X, Y, s, l){
+}
 
+#' @title Computes p(y | X, b, beta, prior_variance, residual_variance) approximately where effect l is always deactivated, that is, beta[l]=0
+deactivated_effect_susie_ann_likelihood <- function(X, Y, s, l){
+}
+
+#' @title Computes p(y | X, b, beta, prior_variance, residual_variance) approximately by drawing from the model posterior
+susie_ann_likelihood <- function(X, Y, s){
+}
