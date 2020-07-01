@@ -24,7 +24,7 @@ susie_init_coef = function(coef_index, coef_value, p) {
 }
 
 # @title Set default susie initialization
-init_setup = function(n, p, L, scaled_prior_variance, residual_variance, prior_weights, null_weight, varY, standardize) {
+init_setup = function(n, p, L, rho, scaled_prior_variance, residual_variance, prior_weights, null_weight, varY, standardize) {
   if (!is.numeric(scaled_prior_variance) || scaled_prior_variance < 0)
     stop("Scaled prior variance should be positive number.")
   if (scaled_prior_variance > 1 && standardize == TRUE)
@@ -39,13 +39,15 @@ init_setup = function(n, p, L, scaled_prior_variance, residual_variance, prior_w
     stop("Prior weights must have length p.")
   if (p < L) L = p
   s = list(alpha=matrix(1/p,nrow=L,ncol=p),
+           beta=rep(rho,L),
            mu=matrix(0,nrow=L,ncol=p),
            mu2=matrix(0,nrow=L,ncol=p),
            Xr=rep(0,n), KL=rep(NA,L),
            lbf=rep(NA,L),
            sigma2=residual_variance,
            V=scaled_prior_variance * varY,
-           pi=prior_weights)
+           pi=prior_weights,
+           rho)
   if (is.null(null_weight)) s$null_index = 0
   else s$null_index = p
   class(s) = 'susie'
@@ -65,6 +67,9 @@ init_finalize = function(s, X=NULL, Xr=NULL) {
     stop("Input residual variance `sigma2` must be a scalar")
   if (s$sigma2 <= 0)
     stop("residual variance `sigma2` must be positive (is your var(Y) zero?)")
+  ## check that 0 <= rho <= 1
+  if (s$rho<0 || s$rho>1)
+    stop("prior effect inclusion probability rho must be between 0 and 1")
   ## check prior variance
   if (!is.numeric(s$V))
     stop("Input prior variance must be numeric")

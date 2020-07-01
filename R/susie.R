@@ -185,8 +185,8 @@
 #'
 #' @export
 #'
-susie <- function(X,Y,L = min(10,ncol(X)),scaled_prior_variance = 0.2,
-                 residual_variance=NULL,
+susie <- function(X,Y,L = min(10,ncol(X)),rho=0.5,
+                 scaled_prior_variance=0.2, residual_variance=NULL,
                  prior_weights=NULL, null_weight=NULL,
                  standardize=TRUE,intercept=TRUE,
                  estimate_residual_variance=TRUE,
@@ -240,7 +240,7 @@ susie <- function(X,Y,L = min(10,ncol(X)),scaled_prior_variance = 0.2,
   }
   X = set_X_attributes(X,center=intercept, scale=standardize)
   # initialize susie fit
-  s = init_setup(n,p,L,scaled_prior_variance,residual_variance,prior_weights,null_weight,as.numeric(var(Y)),standardize)
+  s = init_setup(n,p,L,rho,scaled_prior_variance,residual_variance,prior_weights,null_weight,as.numeric(var(Y)),standardize)
   if (!missing(s_init)) {
     s = modifyList(s, s_init)
     s = init_finalize(s, X=X)
