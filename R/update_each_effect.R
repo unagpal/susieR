@@ -40,12 +40,32 @@ update_each_effect <- function (X, Y, s, estimate_prior_variance=FALSE,
 
 #' @title Computes p(y | X, b, beta, prior_variance, residual_variance) approximately where effect l is always activated, that is, beta[l]=1
 activated_effect_susie_ann_likelihood <- function(X, Y, s, l){
+  activated_effect_susie_model <- s
+  activated_effect_susie_model$beta[l] <- 1
+  return(susie_ann_likelihood(X, Y, activated_effect_susie_model))
 }
 
 #' @title Computes p(y | X, b, beta, prior_variance, residual_variance) approximately where effect l is always deactivated, that is, beta[l]=0
 deactivated_effect_susie_ann_likelihood <- function(X, Y, s, l){
+  deactivated_effect_susie_model <- s
+  deactivated_effect_susie_model$beta[l] <- 0
+  return(susie_ann_likelihood(X, Y, deactivated_effect_susie_model))
 }
 
 #' @title Computes p(y | X, b, beta, prior_variance, residual_variance) approximately by drawing from the model posterior
-susie_ann_likelihood <- function(X, Y, s){
+susie_ann_likelihood <- function(X, Y, s, posterior_draws=500){
+  p <- ncol(X)
+  all_likelihoods <- rep(0, posterior_draws)
+  for (post_draw in 1:posterior_draws){
+    post_sample_b <- rep(0, p)
+    sampled_beta <- rbern(L, s$beta)
+    for (l in 1:L){
+      sampled_gamma <- rmultinom(1, size=1, prob=s$alpha[l,])
+      sampled_coef <- rnorm(L, mean=s$mu[l,], sqrt(s$mu2[l,] - s$mu[l,]^2))
+      post_sample_b = post_sample_b + sampled_beta[l] * sampled_mu * sampled_gamma
+    }
+    residuals <- Y - compute_Xb(X,post_sample_b)
+    all_likelihoods[post_draw] = exp(dnorm(residuals,mean=0, sd=sqrt(s%sigma2), log=TRUE))     
+  }
+  return(mean(all_likelihoods))
 }
