@@ -1,4 +1,4 @@
-#' @title SUm of Single Effects (SuSiE) Regression
+#' @title Sum of Single Effects with Annotations (SuSiE-Ann) Regression
 #'
 #' @description Performs Bayesian multiple linear regression of Y on
 #'   X; that is, this function fits the regression model \eqn{Y = sum_l
@@ -169,16 +169,22 @@
 #'
 #' @examples
 #'
-#' set.seed(1)
-#' n = 1000
-#' p = 1000
-#' beta = rep(0,p)
-#' beta[1:4] = 1
-#' X = matrix(rnorm(n*p),nrow=n,ncol=p)
-#' y = X %*% beta + rnorm(n)
-#' res = susie(X,y,L=10)
-#' coef(res)
-#' plot(y,predict(res))
+source("SuSiE-Ann/susieR/R/set_X_attributes.R")
+source("SuSiE-Ann/susieR/R/initialize.R")
+source("SuSiE-Ann/susieR/R/update_each_effect.R")
+source("SuSiE-Ann/susieR/R/estimate_residual_variance.R")
+source("SuSiE-Ann/susieR/R/susie_utils.R")
+set.seed(1)
+n = 10
+p = 5
+b = rep(0,p)
+b[1:3] = 1
+X = matrix(rnorm(n*p),nrow=n,ncol=p)
+y = X %*% b + rnorm(n)
+res = susie(X,y,L=3)
+coef(res)
+plot(y,predict(res))
+print(res)
 #'
 #' @importFrom stats var
 #' @importFrom utils modifyList

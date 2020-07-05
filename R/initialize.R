@@ -47,7 +47,7 @@ init_setup = function(n, p, L, rho, scaled_prior_variance, residual_variance, pr
            sigma2=residual_variance,
            V=scaled_prior_variance * varY,
            pi=prior_weights,
-           rho)
+           rho=rho)
   if (is.null(null_weight)) s$null_index = 0
   else s$null_index = p
   class(s) = 'susie'

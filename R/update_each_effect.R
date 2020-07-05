@@ -5,6 +5,9 @@
 #' @param estimate_prior_variance boolean indicating whether to estimate prior variance
 #' @param check_null_threshold float a threshold on the log scale to compare likelihood between current estimate and zero the null
 #' @keywords internal
+source("SuSiE-Ann/susieR/R/single_effect_regression.R")
+source("SuSiE-Ann/susieR/R/sparse_multiplication.R")
+source("SuSiE-Ann/susieR/R/elbo.R")
 update_each_effect <- function (X, Y, s, estimate_prior_variance=FALSE,
                                 estimate_prior_method="optim",check_null_threshold) {
   if(estimate_prior_variance==FALSE) estimate_prior_method="none"
@@ -29,7 +32,7 @@ update_each_effect <- function (X, Y, s, estimate_prior_variance=FALSE,
       s$V[l] <- res$V
       s$lbf[l] <- res$lbf_model
       s$KL[l] <- -res$loglik + SER_posterior_e_loglik(X,R,s$sigma2,res$alpha*res$mu,res$alpha*res$mu2)
-      s$beta[l] <- rho*activated_effect_susie_ann_likelihood(X, Y, s, l) / ((1-rho)*deactivated_effect_susie_ann_likelihood(X, Y, s, l) + rho * activated_effect_susie_ann_likelihood(X, Y, s))
+      s$beta[l] <- s$rho*activated_effect_susie_ann_likelihood(X, Y, s, l) / ((1-s$rho)*deactivated_effect_susie_ann_likelihood(X, Y, s, l) + s$rho * activated_effect_susie_ann_likelihood(X, Y, s))
 
       s$Xr <- s$Xr + compute_Xb(X, (s$beta[l] * s$alpha[l,] * s$mu[l,]))
     }
@@ -55,17 +58,18 @@ deactivated_effect_susie_ann_likelihood <- function(X, Y, s, l){
 #' @title Computes p(y | X, b, beta, prior_variance, residual_variance) approximately by drawing from the model posterior
 susie_ann_likelihood <- function(X, Y, s, posterior_draws=500){
   p <- ncol(X)
+  L <- nrow(s$alpha)
   all_likelihoods <- rep(0, posterior_draws)
   for (post_draw in 1:posterior_draws){
     post_sample_b <- rep(0, p)
-    sampled_beta <- rbern(L, s$beta)
+    sampled_beta <- rbinom(n=L, size=1, prob=s$beta)
     for (l in 1:L){
       sampled_gamma <- rmultinom(1, size=1, prob=s$alpha[l,])
       sampled_coef <- rnorm(L, mean=s$mu[l,], sqrt(s$mu2[l,] - s$mu[l,]^2))
-      post_sample_b = post_sample_b + sampled_beta[l] * sampled_mu * sampled_gamma
+      post_sample_b = post_sample_b + s$mu[l,] * sampled_gamma * sampled_beta[l]
     }
     residuals <- Y - compute_Xb(X,post_sample_b)
-    all_likelihoods[post_draw] = exp(dnorm(residuals,mean=0, sd=sqrt(s%sigma2), log=TRUE))     
+    all_likelihoods[post_draw] = exp(sum(dnorm(residuals,mean=0, sd=sqrt(s$sigma2), log=TRUE)))     
   }
   return(mean(all_likelihoods))
 }
