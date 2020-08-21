@@ -44,6 +44,7 @@ init_setup = function(n, p, L, rho, scaled_prior_variance, residual_variance, pr
            mu2=matrix(0,nrow=L,ncol=p),
            Xr=rep(0,n), KL=rep(NA,L),
            lbf=rep(NA,L),
+           var_lbf=matrix(NA, nrow=L, ncol=p),
            sigma2=residual_variance,
            V=scaled_prior_variance * varY,
            pi=prior_weights,
