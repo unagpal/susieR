@@ -6,7 +6,7 @@ library(numDeriv)
 source("SuSiE-Ann/susieR/R/susie_ann.R")
 
 #Function executing gradient-based optimization of ELBO w.r.t 
-#annotation weights w. Returns 
+#annotation weights w. Returns updated annotation weights.
 gradient_opt_annotation_weights <- function(X,Y,A,annotation_weights,s,elbo_opt_steps_per_itr, step_size=0.001){
   for (itr in 1:elbo_opt_steps_per_itr){
     elbo_gradient <- grad(elbo, x=annotation_weights, X=X, Y=Y, A=A, s=s, elbo_opt_steps_per_itr=elbo_opt_steps_per_itr)
