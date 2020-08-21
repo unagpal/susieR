@@ -63,7 +63,7 @@ susie_ann <- function(X,Y, A, annotation_weights=rep(1/ncol(A),nrow(A)),
                compute_univariate_zscore = compute_univariate_zscore,
                na.rm = na.rm, max_iter=max_itr,tol=tol,
                verbose=verbose,track_fit=track_fit)
-    annotation_weights <- gradient_opt_annotation_weights(X,Y,A,s,elbo_opt_steps_per_itr)
+    annotation_weights <- gradient_opt_annotation_weights(X,Y,A,annotation_weights,s,elbo_opt_steps_per_itr)
     updated_pi_rho <- pi_rho_from_annotation_weights(A, annotation_weights,L)
     pi <- updated_pi_rho$pi
     rho <- updated_pi_rho$rho
