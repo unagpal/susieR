@@ -24,9 +24,24 @@ pi_rho_from_annotation_weights <- function(A, annotation_weights, L){
   return (list(pi=pi, rho=rho))
 }
 
+#' Function whose root is taken in initializing annotation weights
+difference_from_specified_rho <- function(A,equal_annotation_weight, L, specified_rho){
+  annotation_weights <- c(rep(equal_annotation_weight, ncol(A)-1), c(0))
+  return (pi_rho_from_annotation_weights(A, annotation_weights, L)$rho - specified_rho)
+}
+
+#' Given A and rho, solves for the initial annotation weights
+#' where each annotation is weighted equally resulting in the
+#' specified value of rho
+init_annotation_weights_from_rho <- function(A, L, specified_rho){
+  solved_annotation_weight <- uniroot.all(difference_from_specified_rho, interval=c(-100,100), A=A, L=L, specified_rho=specified_rho)[1]
+  return (c(rep(solved_annotation_weight, ncol(A)-1), c(0)))
+}
+
 #' Function executing alternating optimization of SuSiE-Ann model
 #' Currently gradient_opt_annotation_weights is a placeholder function
-susie_ann <- function(X,Y, A, annotation_weights=rep(1/ncol(A),ncol(A)),
+susie_ann <- function(X,Y, A,
+                  annotation_weights=NULL, rho=0.2,
                   L = min(10,ncol(X)),
                   scaled_prior_variance=0.2, residual_variance=NULL,
                   prior_weights=NULL, null_weight=NULL,
@@ -44,12 +59,17 @@ susie_ann <- function(X,Y, A, annotation_weights=rep(1/ncol(A),ncol(A)),
                   max_iter=100,tol=1e-3,
                   verbose=FALSE,track_fit=FALSE) {
   A = cbind(A, rep(1, nrow(A)))
-  init_pi_rho <- pi_rho_from_annotation_weights(A, annotation_weights, L)
-  pi <- init_pi_rho$pi
-  rho <- init_pi_rho$rho
+  if annotation_weights != NULL{
+    if pi_rho_from_annotation_weights(A, annotation_weights, L)$rho > 1{
+      stop("Specified annotation weights are invalid; rho must be between 0 and 1")
+    }
+  }
   for (susie_ann_itr in 1:susie_ann_itr){
     if (susie_ann_itr > 1){
       s_init = s
+    }
+    else if (annotation_weights == NULL){
+      annotation_weights = init_annotation_weights_from_rho(A, L, rho)
     }
     s <- susie(X,Y,L=L,rho=rho,
                scaled_prior_variance=scaled_prior_variance, residual_variance=residual_variance,
