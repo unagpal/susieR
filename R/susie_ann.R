@@ -59,35 +59,65 @@ susie_ann <- function(X,Y, A,
                   max_iter=100,tol=1e-3,
                   verbose=FALSE,track_fit=FALSE) {
   A = cbind(A, rep(1, nrow(A)))
-  if annotation_weights != NULL{
-    if pi_rho_from_annotation_weights(A, annotation_weights, L)$rho > 1{
+  if (annotation_weights != NULL){
+    if (pi_rho_from_annotation_weights(A, annotation_weights, L)$rho > 1){
       stop("Specified annotation weights are invalid; rho must be between 0 and 1")
     }
   }
-  for (susie_ann_itr in 1:susie_ann_itr){
-    if (susie_ann_itr > 1){
-      s_init = s
+  else
+    annotation_weights = init_annotation_weights_from_rho(A, L, rho)
+  for (susie_ann_itr in 1:susie_ann_opt_itr){
+    if (susie_ann_itr > 1 | s_init != NULL){
+      s_init <- susie(X,Y,L=L,rho=rho,
+                 scaled_prior_variance=scaled_prior_variance, residual_variance=residual_variance,
+                 prior_weights=pi, null_weight=null_weight,
+                 standardize=standardize,intercept=intercept,
+                 estimate_residual_variance=estimate_residual_variance,
+                 estimate_prior_variance = estimate_prior_variance,
+                 estimate_prior_method = estimate_prior_method,
+                 check_null_threshold=check_null_threshold, prior_tol=prior_toll,
+                 residual_variance_upperbound = residual_variance_upperbound,
+                 s_init = s_init,coverage=coverage,min_abs_corr=min_abs_corr,
+                 compute_univariate_zscore = compute_univariate_zscore,
+                 na.rm = na.rm, max_iter=max_itr,tol=tol,
+                 verbose=verbose,track_fit=track_fit)
     }
-    else if (annotation_weights == NULL){
-      annotation_weights = init_annotation_weights_from_rho(A, L, rho)
-    }
-    s <- susie(X,Y,L=L,rho=rho,
-               scaled_prior_variance=scaled_prior_variance, residual_variance=residual_variance,
-               prior_weights=pi, null_weight=null_weight,
-               standardize=standardize,intercept=intercept,
-               estimate_residual_variance=estimate_residual_variance,
-               estimate_prior_variance = estimate_prior_variance,
-               estimate_prior_method = estimate_prior_method,
-               check_null_threshold=check_null_threshold, prior_tol=prior_toll,
-               residual_variance_upperbound = residual_variance_upperbound,
-               s_init = s_init,coverage=coverage,min_abs_corr=min_abs_corr,
-               compute_univariate_zscore = compute_univariate_zscore,
-               na.rm = na.rm, max_iter=max_itr,tol=tol,
-               verbose=verbose,track_fit=track_fit)
-    annotation_weights <- gradient_opt_annotation_weights(X,Y,A,annotation_weights,s,elbo_opt_steps_per_itr)
+    else{
+      s_init <- susie(X,Y,L=L,rho=rho,
+                 scaled_prior_variance=scaled_prior_variance, residual_variance=residual_variance,
+                 prior_weights=prior_weights, null_weight=null_weight,
+                 standardize=standardize,intercept=intercept,
+                 estimate_residual_variance=estimate_residual_variance,
+                 estimate_prior_variance = estimate_prior_variance,
+                 estimate_prior_method = estimate_prior_method,
+                 check_null_threshold=check_null_threshold, prior_tol=prior_toll,
+                 residual_variance_upperbound = residual_variance_upperbound,
+                 coverage=coverage,min_abs_corr=min_abs_corr,
+                 compute_univariate_zscore = compute_univariate_zscore,
+                 na.rm = na.rm, max_iter=max_itr,tol=tol,
+                 verbose=verbose,track_fit=track_fit)
+    } 
+    annotation_weights <- gradient_opt_annotation_weights(X,Y,A,annotation_weights,s_init,elbo_opt_steps_per_itr)
     updated_pi_rho <- pi_rho_from_annotation_weights(A, annotation_weights,L)
     pi <- updated_pi_rho$pi
     rho <- updated_pi_rho$rho
+    print("Finished one alternating optimization iteration")
   }
   return(list(susie_model=s, w=annotation_weights))
 }
+
+set.seed(1)
+n = 10
+p = 5
+b = rep(0,p)
+A = matrix(1:25, nrow=5, ncol=5)
+print("Defined matrix A")
+b[1:3] = 1
+X = matrix(rnorm(n*p),nrow=n,ncol=p)
+y = X %*% b + rnorm(n)
+print("Defined X and Y; now calling susie_ann")
+susie_ann_res <- susie_ann(X,y,A, L=3)
+res = susie_ann_res$susie_model
+#coef(res)
+plot(y,predict(res))
+#print(res)
