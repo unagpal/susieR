@@ -3,7 +3,16 @@
 #'pi_rho_from_annotation_weights is used to calculate pi from w and A
 
 library(numDeriv)
-source("SuSiE-Ann/susieR/R/susie_ann.R")
+#' source("SuSiE-Ann/susieR/R/susie_ann.R")
+
+#' Obtaining pi and rho from annotation weights w and annotations A
+#' (and number of effects L)
+pi_rho_from_annotation_weights <- function(A, annotation_weights, L){
+  tilda_pi = 1 - sigmoid((-A %*% annotation_weights))^(1/L)
+  rho = sum(tilda_pi)
+  pi = tilda_pi/rho
+  return (list(pi=pi, rho=rho))
+}
 
 #Function executing gradient-based optimization of ELBO w.r.t 
 #annotation weights w. Returns updated annotation weights.

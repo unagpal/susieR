@@ -174,17 +174,17 @@ source("SuSiE-Ann/susieR/R/initialize.R")
 source("SuSiE-Ann/susieR/R/update_each_effect.R")
 source("SuSiE-Ann/susieR/R/estimate_residual_variance.R")
 source("SuSiE-Ann/susieR/R/susie_utils.R")
-set.seed(1)
-n = 10
-p = 5
-b = rep(0,p)
-b[1:3] = 1
-X = matrix(rnorm(n*p),nrow=n,ncol=p)
-y = X %*% b + rnorm(n)
-res = susie(X,y,L=3)
-coef(res)
-plot(y,predict(res))
-print(res)
+#' set.seed(1)
+#' n = 10
+#' p = 5
+#' b = rep(0,p)
+#' b[1:3] = 1
+#' X = matrix(rnorm(n*p),nrow=n,ncol=p)
+#' y = X %*% b + rnorm(n)
+#' res = susie(X,y,L=3)
+#' coef(res)
+#' plot(y,predict(res))
+#' print(res)
 #'
 #' @importFrom stats var
 #' @importFrom utils modifyList

@@ -2,11 +2,12 @@
 #' and gradient ascent optimization of ELBO with respect to annotation 
 #' weights w
 
-source("SuSiE-Ann/susieR/R/set_X_attributes.R")
-source("SuSiE-Ann/susieR/R/initialize.R")
-source("SuSiE-Ann/susieR/R/update_each_effect.R")
-source("SuSiE-Ann/susieR/R/estimate_residual_variance.R")
-source("SuSiE-Ann/susieR/R/susie_utils.R")
+library(rootSolve)
+#source("SuSiE-Ann/susieR/R/set_X_attributes.R")
+#source("SuSiE-Ann/susieR/R/initialize.R")
+#source("SuSiE-Ann/susieR/R/update_each_effect.R")
+#source("SuSiE-Ann/susieR/R/estimate_residual_variance.R")
+#source("SuSiE-Ann/susieR/R/susie_utils.R")
 source("SuSiE-Ann/susieR/R/susie.R")
 source("SuSiE-Ann/susieR/R/susie_ann_elbo.R")
 
@@ -26,8 +27,12 @@ pi_rho_from_annotation_weights <- function(A, annotation_weights, L){
 
 #' Function whose root is taken in initializing annotation weights
 difference_from_specified_rho <- function(A,equal_annotation_weight, L, specified_rho){
-  annotation_weights <- c(rep(equal_annotation_weight, ncol(A)-1), c(0))
-  return (pi_rho_from_annotation_weights(A, annotation_weights, L)$rho - specified_rho)
+  all_differences <- rep(0, length(equal_annotation_weight))
+  for (i in 1:length(equal_annotation_weight)){
+    annotation_weights <- c(rep(equal_annotation_weight[i], ncol(A)-1), c(0))
+    all_differences[i] = pi_rho_from_annotation_weights(A, annotation_weights, L)$rho - specified_rho
+  }
+  return (all_differences)
 }
 
 #' Given A and rho, solves for the initial annotation weights
@@ -58,16 +63,19 @@ susie_ann <- function(X,Y, A,
                   elbo_opt_steps_per_itr=100,
                   max_iter=100,tol=1e-3,
                   verbose=FALSE,track_fit=FALSE) {
+  print("Beginning susie ann function")
   A = cbind(A, rep(1, nrow(A)))
-  if (annotation_weights != NULL){
+  if (!is.null(annotation_weights)){
     if (pi_rho_from_annotation_weights(A, annotation_weights, L)$rho > 1){
       stop("Specified annotation weights are invalid; rho must be between 0 and 1")
     }
   }
   else
     annotation_weights = init_annotation_weights_from_rho(A, L, rho)
+    print("Initialized annotation weights from rho and they equal: ")
+    print(annotation_weights)
   for (susie_ann_itr in 1:susie_ann_opt_itr){
-    if (susie_ann_itr > 1 | s_init != NULL){
+    if (susie_ann_itr > 1 | !is.null(s_init)){
       s_init <- susie(X,Y,L=L,rho=rho,
                  scaled_prior_variance=scaled_prior_variance, residual_variance=residual_variance,
                  prior_weights=pi, null_weight=null_weight,
@@ -75,11 +83,11 @@ susie_ann <- function(X,Y, A,
                  estimate_residual_variance=estimate_residual_variance,
                  estimate_prior_variance = estimate_prior_variance,
                  estimate_prior_method = estimate_prior_method,
-                 check_null_threshold=check_null_threshold, prior_tol=prior_toll,
+                 check_null_threshold=check_null_threshold, prior_tol=prior_tol,
                  residual_variance_upperbound = residual_variance_upperbound,
                  s_init = s_init,coverage=coverage,min_abs_corr=min_abs_corr,
                  compute_univariate_zscore = compute_univariate_zscore,
-                 na.rm = na.rm, max_iter=max_itr,tol=tol,
+                 na.rm = na.rm, max_iter=max_iter,tol=tol,
                  verbose=verbose,track_fit=track_fit)
     }
     else{
@@ -90,11 +98,11 @@ susie_ann <- function(X,Y, A,
                  estimate_residual_variance=estimate_residual_variance,
                  estimate_prior_variance = estimate_prior_variance,
                  estimate_prior_method = estimate_prior_method,
-                 check_null_threshold=check_null_threshold, prior_tol=prior_toll,
+                 check_null_threshold=check_null_threshold, prior_tol=prior_tol,
                  residual_variance_upperbound = residual_variance_upperbound,
                  coverage=coverage,min_abs_corr=min_abs_corr,
                  compute_univariate_zscore = compute_univariate_zscore,
-                 na.rm = na.rm, max_iter=max_itr,tol=tol,
+                 na.rm = na.rm, max_iter=max_iter,tol=tol,
                  verbose=verbose,track_fit=track_fit)
     } 
     annotation_weights <- gradient_opt_annotation_weights(X,Y,A,annotation_weights,s_init,elbo_opt_steps_per_itr)
