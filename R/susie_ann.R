@@ -26,7 +26,7 @@ pi_rho_from_annotation_weights <- function(A, annotation_weights, L){
 
 #' Function executing alternating optimization of SuSiE-Ann model
 #' Currently gradient_opt_annotation_weights is a placeholder function
-susie_ann <- function(X,Y, A, annotation_weights=rep(1/ncol(A),nrow(A)),
+susie_ann <- function(X,Y, A, annotation_weights=rep(1/ncol(A),ncol(A)),
                   L = min(10,ncol(X)),
                   scaled_prior_variance=0.2, residual_variance=NULL,
                   prior_weights=NULL, null_weight=NULL,
@@ -43,6 +43,7 @@ susie_ann <- function(X,Y, A, annotation_weights=rep(1/ncol(A),nrow(A)),
                   elbo_opt_steps_per_itr=100,
                   max_iter=100,tol=1e-3,
                   verbose=FALSE,track_fit=FALSE) {
+  A = cbind(A, rep(1, nrow(A)))
   init_pi_rho <- pi_rho_from_annotation_weights(A, annotation_weights, L)
   pi <- init_pi_rho$pi
   rho <- init_pi_rho$rho
