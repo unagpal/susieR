@@ -69,8 +69,10 @@ init_finalize = function(s, X=NULL, Xr=NULL) {
   if (s$sigma2 <= 0)
     stop("residual variance `sigma2` must be positive (is your var(Y) zero?)")
   ## check that 0<= beta_l <= 1 for all effects l
-  if (!all(s$beta >= 0.0 & s$beta <= 1.0))
+  if (!all(s$beta >= 0.0 & s$beta <= 1.0)){
+    print(s$beta)
     stop("posterior effect inclusion probabilities beta_l must all be between 0 and 1")
+  }
   ## check that 0 <= rho <= 1
   if (s$rho<0 || s$rho>1)
     stop("prior effect inclusion probability rho must be between 0 and 1")
