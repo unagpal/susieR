@@ -253,7 +253,6 @@ susie <- function(X,Y,L = min(10,ncol(X)),rho=0.5,
   } else {
     s = init_finalize(s)
   }
-
   #initialize elbo to NA
   elbo = rep(NA,max_iter+1)
   elbo[1] = -Inf;

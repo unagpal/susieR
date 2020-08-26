@@ -31,10 +31,15 @@ init_setup = function(n, p, L, rho, scaled_prior_variance, residual_variance, pr
     stop("Scaled prior variance should be no greater than 1 when standardize = TRUE.")
   if(is.null(residual_variance))
     residual_variance = varY
-  if(is.null(prior_weights))
+  if(is.null(prior_weights)){
+    print("Found prior weights null and initializing to uniform")
     prior_weights = rep(1/p, p)
-  else
+  }
+  else{
+    #print("normalizing prior weights to:")
     prior_weights = prior_weights / sum(prior_weights)
+    #print(prior_weights)
+  }
   if(length(prior_weights) != p)
     stop("Prior weights must have length p.")
   if (p < L) L = p

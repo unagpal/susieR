@@ -64,7 +64,7 @@ susie_ann_likelihood <- function(X, Y, s, posterior_draws=500){
   all_likelihoods <- rep(0, posterior_draws)
   for (post_draw in 1:posterior_draws){
     post_sample_b <- rep(0, p)
-    sampled_beta <- rbinom(n=L, size=1, prob=s$beta)
+    sampled_beta <- rbinom(n=L, size=1, prob=min(c(s$beta, 1.0)))
     for (l in 1:L){
       sampled_gamma <- rmultinom(1, size=1, prob=s$alpha[l,])
       sampled_coef <- rnorm(L, mean=s$mu[l,], sqrt(s$mu2[l,] - s$mu[l,]^2))
