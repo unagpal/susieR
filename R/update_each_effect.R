@@ -14,17 +14,17 @@ update_each_effect <- function (X, Y, s, estimate_prior_variance=FALSE,
 
   # Repeat for each effect to update
   L = nrow(s$alpha)
-
+  print("now looping through effects")
   if(L>0){
     for (l in 1:L){
       # remove lth effect from fitted values
       s$Xr = s$Xr - compute_Xb(X, (s$beta[l] * s$alpha[l,] * s$mu[l,]))
       #compute residuals
       R = Y - s$Xr
-
+      print('calling single effect regression')
       res <- single_effect_regression(R,X,s$V[l],s$sigma2,s$pi,
                                       estimate_prior_method,check_null_threshold)
-
+      print('done calling single effect regression')
       # Update the variational estimate of the posterior mean.
       s$mu[l,] <- res$mu
       s$alpha[l,] <- res$alpha
@@ -37,6 +37,7 @@ update_each_effect <- function (X, Y, s, estimate_prior_variance=FALSE,
       
       
       s$Xr <- s$Xr + compute_Xb(X, (s$beta[l] * s$alpha[l,] * s$mu[l,]))
+      print("done looping through 1 effect")
     }
   }
 

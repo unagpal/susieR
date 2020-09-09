@@ -26,16 +26,29 @@ compute_Xb = function(X, b){
 #' @importFrom Matrix crossprod
 #' @keywords internal
 compute_Xty = function(X, y){
+  print("dimensions of X and y")
+  print(dim(X))
+  print(dim(y))
   cm = attr(X, 'scaled:center')
   csd = attr(X, 'scaled:scale')
   ytX <- crossprod(y, X)
+  print("X in crossprod:")
+  print(X)
+  print('y in crossprod')
+  print(y)
+  print("ytx:")
+  print(ytX)
   #scale Xty
   #when X is a trend filtering matrix
   if (!is.null(attr(X,"matrix.type"))) scaled.Xty <- compute_tf_Xty(attr(X, 'order'),y)/csd
   #when X is an ordinary sparse/dense matrix
   else scaled.Xty <- t(ytX/csd)
   #center Xty
+  print("scaled xty")
+  print(scaled.Xty)
   centered.scaled.Xty <- scaled.Xty - cm/csd * sum(y)
+  print("centered scaled xty: ")
+  print(centered.scaled.Xty)
   return(as.numeric(centered.scaled.Xty))
 }
 

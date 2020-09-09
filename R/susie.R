@@ -174,17 +174,29 @@ source("SuSiE-Ann/susieR/R/initialize.R")
 source("SuSiE-Ann/susieR/R/update_each_effect.R")
 source("SuSiE-Ann/susieR/R/estimate_residual_variance.R")
 source("SuSiE-Ann/susieR/R/susie_utils.R")
-#' set.seed(1)
-#' n = 10
-#' p = 5
-#' b = rep(0,p)
-#' b[1:3] = 1
-#' X = matrix(rnorm(n*p),nrow=n,ncol=p)
-#' y = X %*% b + rnorm(n)
-#' res = susie(X,y,L=3)
-#' coef(res)
-#' plot(y,predict(res))
-#' print(res)
+# set.seed(1)
+# n = 1000
+# p = 5
+# b = rep(0,p)
+# b[1:3] = 1
+# X = matrix(rnorm(n*p),nrow=n,ncol=p)
+# y = X %*% b + rnorm(n)
+# print(y)
+# res = susie(X,y,L=3)
+# coef(res)
+# plot(y,predict(res))
+# print(res)
+set.seed(1)
+n    <- 1000
+p    <- 1000
+beta <- rep(0,p)
+beta[c(1,2,300,400)] <- 1
+X   <- matrix(rnorm(n*p),nrow=n,ncol=p)
+y   <- X %*% beta + rnorm(n)
+print('calling susie')
+res <- susie(X,y,L=10)
+print('done calling susie')
+coef(res)
 #'
 #' @importFrom stats var
 #' @importFrom utils modifyList
@@ -235,6 +247,7 @@ susie <- function(X,Y,L = min(10,ncol(X)),rho=0.5,
       stop("Input Y must not contain missing values.")
     }
   }
+  
   # Check input Y
   p = ncol(X)
   n = nrow(X)
@@ -258,12 +271,18 @@ susie <- function(X,Y,L = min(10,ncol(X)),rho=0.5,
   elbo[1] = -Inf;
   tracking = list()
 
-
+  print("starting susie iterations")
   for(i in 1:max_iter){
     #s = add_null_effect(s,0)
+    print('calling if track fit')
     if (track_fit)
       tracking[[i]] = susie_slim(s)
+    print('calling update each effect')
+    print(estimate_prior_variance)
+    print(estimate_prior_method)
+    print(check_null_threshold)
     s = update_each_effect(X, Y, s, estimate_prior_variance,estimate_prior_method,check_null_threshold)
+    print('calling if verbose')
     if(verbose){
         print(paste0("objective:",get_objective(X,Y,s)))
     }
@@ -271,10 +290,12 @@ susie <- function(X,Y,L = min(10,ncol(X)),rho=0.5,
     # because part of the objective s$kl has already been computed
     # under the residual variance before the update
     elbo[i+1] = get_objective(X,Y,s)
+    print('calling if elbo - elbo < tol')
     if((elbo[i+1]-elbo[i])<tol) {
       s$converged = TRUE
       break;
     }
+    print('calling if estimate_residual_var')
     if(estimate_residual_variance){
       s$sigma2 = estimate_residual_variance(X,Y,s)
       if(s$sigma2 > residual_variance_upperbound){
@@ -285,6 +306,7 @@ susie <- function(X,Y,L = min(10,ncol(X)),rho=0.5,
       }
     }
     #s = remove_null_effects(s)
+    print('one susie optimization iteration done')
   }
   elbo = elbo[2:(i+1)] # Remove first (infinite) entry, and trailing NAs.
   s$elbo <- elbo

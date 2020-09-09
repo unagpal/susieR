@@ -60,6 +60,7 @@ generate_toy_data <- function(beta, corr, noise_ratio, annot_signal_ratio, n){
     x2 = x2 * sqrt(var(x1)/var(x2))
   effect_inclusion <- rbinom(n, beta, size=1)
   y <- x1 * effect_inclusion + noise_ratio * rnorm(n)
+  y = matrix(y, nrow=length(y), ncol=1)
   return (list(X=cbind(x1, x2), Y=y, A=A, effect_inclusions=effect_inclusion))
 }
 
@@ -112,6 +113,7 @@ susie_ann <- function(X,Y, A,
                  verbose=verbose,track_fit=track_fit)
     }
     else{
+      print("Obtaining pi from annotation weights:")
       print(pi_rho_from_annotation_weights(A, annotation_weights,L)$pi)
       s_init <- susie(X,Y,L=L,rho=rho,
                  scaled_prior_variance=scaled_prior_variance, residual_variance=residual_variance,
@@ -128,6 +130,7 @@ susie_ann <- function(X,Y, A,
                  compute_univariate_zscore = compute_univariate_zscore,
                  na.rm = na.rm, max_iter=max_iter,tol=tol,
                  verbose=verbose,track_fit=track_fit)
+      print("Done initializing SuSiE in first iteration")
       print(s_init$beta)
     } 
     opt_annot_weights_results <- gradient_opt_annotation_weights(X,Y,A,annotation_weights,s_init,elbo_opt_steps_per_itr)
@@ -145,52 +148,56 @@ susie_ann <- function(X,Y, A,
   return(list(susie_model=s_init, w=annotation_weights, final_pi=pi, elbo_values=all_annotation_weight_elbo, all_rho=all_iter_rho))
 }
 
-# Test Case 1: SuSiE-Ann example based on SuSiE vignette
-# set.seed(1)
-# n = 3
-# p = 2
-# b = rep(0,p)
-# A = matrix(1:4, nrow=2, ncol=2)
-# print("Defined matrix A")
-# b[1] = 1
-# X = matrix(rnorm(n*p),nrow=n,ncol=p)
-# y = X %*% b + rnorm(n)
-# print("Defined X and Y; now calling susie_ann")
-# susie_ann_res <- susie_ann(X,y,A,rho=0.1, L=2)
-# res = susie_ann_res$susie_model
-# #coef(res)
-# plot(y,predict(res))
-# #print(res)
+#Test Case 1: SuSiE-Ann example based on SuSiE vignette
+set.seed(1)
+n = 3
+p = 2
+b = rep(0,p)
+A = matrix(c(0,1,1,0), nrow=2, ncol=2)
+print("Defined matrix A")
+b[1] = 1
+X = matrix(rnorm(n*p),nrow=n,ncol=p)
+y = X %*% b + rnorm(n)
+print(dim(X))
+print(dim(y))
+print(crossprod(y, X))
+print("Defined X and Y; now calling susie_ann")
+susie_ann_res <- susie_ann(X,y,A,rho=0.1, L=1)
+res = susie_ann_res$susie_model
+#coef(res)
+plot(y,predict(res))
+#print(res)
 
-# Test Case 2: Toy data for p=2
-toy_data <- generate_toy_data(0.7, 0.7, 0.1, 5, 20)
-print("Printing toy data:")
-print(toy_data$X)
-print(toy_data$Y)
-print(toy_data$A)
-opt_itr <- 30
-L <- 1
-susie_ann_res <- susie_ann(toy_data$X, toy_data$Y, toy_data$A, rho=0.1, L=L, susie_ann_opt_itr=opt_itr)
-optimized_susie_model <- susie_ann_res$susie_model
-print("Beta:")
-print(optimized_susie_model$beta)
-print("Pi:")
-print(susie_ann_res$final_pi)
-print("Alpha (Lxp):")
-print(optimized_susie_model$alpha)
-print("Mu (Lxp):")
-print(optimized_susie_model$mu)
-print("w:")
-print(susie_ann_res$w)
-print("rho:")
-print(susie_ann_res$all_rho[opt_itr])
-plot(1:opt_itr, susie_ann_res$all_rho, xlab="Alternating optimization iteration", ylab="Rho from optimized w")
-plot(1:opt_itr, susie_ann_res$elbo_values, xlab="Alternating optimization iteration", ylab="Optimized ELBO")
-
-post_mean_coef = rep(0, ncol(toy_data$X))
-for (l in 1:L){
-  post_mean_coef = post_mean_coef + optimized_susie_model$beta[l] * optimized_susie_model$alpha * optimized_susie_model$mu
-}
-print("Posterior mean regression coefficients:")
-print(t(post_mean_coef))
-plot(toy_data$X %*% t(post_mean_coef), toy_data$Y, xlab="Average model predictions", ylab="Output")
+# # Test Case 2: Toy data for p=2
+# toy_data <- generate_toy_data(0.7, 0.7, 0.1, 5, 100)
+# print("Printing toy data:")
+# print(toy_data$X)
+# print(toy_data$Y)
+# print(toy_data$A)
+# print(dim(toy_data$Y))
+# opt_itr <- 30
+# L <- 2
+# susie_ann_res <- susie_ann(toy_data$X, toy_data$Y, toy_data$A, rho=0.1, L=L, susie_ann_opt_itr=opt_itr)
+# optimized_susie_model <- susie_ann_res$susie_model
+# print("Beta:")
+# print(optimized_susie_model$beta)
+# print("Pi:")
+# print(susie_ann_res$final_pi)
+# print("Alpha (Lxp):")
+# print(optimized_susie_model$alpha)
+# print("Mu (Lxp):")
+# print(optimized_susie_model$mu)
+# print("w:")
+# print(susie_ann_res$w)
+# print("rho:")
+# print(susie_ann_res$all_rho[opt_itr])
+# plot(1:opt_itr, susie_ann_res$all_rho, xlab="Alternating optimization iteration", ylab="Rho from optimized w")
+# plot(1:opt_itr, susie_ann_res$elbo_values, xlab="Alternating optimization iteration", ylab="Optimized ELBO")
+# 
+# post_mean_coef = rep(0, ncol(toy_data$X))
+# for (l in 1:L){
+#   post_mean_coef = post_mean_coef + optimized_susie_model$beta[l] * optimized_susie_model$alpha * optimized_susie_model$mu
+# }
+# print("Posterior mean regression coefficients:")
+# print(t(post_mean_coef))
+# plot(toy_data$X %*% t(post_mean_coef), toy_data$Y, xlab="Average model predictions", ylab="Output")

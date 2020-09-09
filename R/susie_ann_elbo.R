@@ -81,6 +81,8 @@ elbo <- function(X,Y,A,annotation_weights,susie_fit){
       if (alpha_lj != 0){
         elbo_third_term = elbo_third_term + beta_l * alpha_lj * log((rho * pi[j])/(beta_l * alpha_lj))
       }
+      else
+        print("Error: third term of ELBO undefined")
     }
   }
   return (elbo_first_term + elbo_second_term + elbo_third_term)

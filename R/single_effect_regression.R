@@ -28,12 +28,18 @@ single_effect_regression = function(Y,X,V,residual_variance=1,prior_weights=NULL
   optimize_V = match.arg(optimize_V)
   Xty = compute_Xty(X, Y)
   betahat = (1/attr(X, "d")) * Xty
+  print('attr (X,d):')
+  print(attr(X, "d"))
+  print("xty:")
+  print(Xty)
   shat2 = residual_variance/attr(X, "d")
+  print('about to call isnull prior weights')
   if (is.null(prior_weights))
     prior_weights = rep(1/ncol(X), ncol(X))
-
+  print('about to see what optimize_v is')
+  print(optimize_V)
   if(optimize_V!="EM" && optimize_V!="none") V=optimize_prior_variance(optimize_V, betahat, shat2, prior_weights, alpha=NULL, post_mean2=NULL, V_init=V,check_null_threshold=check_null_threshold)
-
+  print('done calling optimize_v')
   lbf = dnorm(betahat,0,sqrt(V+shat2),log=TRUE) - dnorm(betahat,0,sqrt(shat2),log=TRUE)
   #log(bf) on each SNP
   lbf[shat2==Inf] = 0 # deal with special case of infinite shat2 (eg happens if X does not vary)
@@ -96,12 +102,10 @@ optimize_prior_variance = function(optimize_V, betahat, shat2, prior_weights, al
 #' @importFrom stats dnorm
 #' @keywords internal
 loglik = function(V,betahat,shat2,prior_weights) {
-
   lbf = dnorm(betahat,0,sqrt(V+shat2),log=TRUE) - dnorm(betahat,0,sqrt(shat2),log=TRUE)
   #log(bf) on each SNP
 
   lbf[shat2==Inf] = 0 # deal with special case of infinite shat2 (eg happens if X does not vary)
-
   maxlbf = max(lbf)
   w = exp(lbf-maxlbf) # w =BF/BFmax
   w_weighted = w * prior_weights
