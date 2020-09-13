@@ -18,7 +18,10 @@ update_each_effect <- function (X, Y, s, estimate_prior_variance=FALSE,
   if(L>0){
     for (l in 1:L){
       # remove lth effect from fitted values
-      s$Xr = s$Xr - compute_Xb(X, (s$beta[l] * s$alpha[l,] * s$mu[l,]))
+      if (s$extended_model)
+        s$Xr = s$Xr - compute_Xb(X, (s$beta[l] * s$alpha[l,] * s$mu[l,]))
+      else
+        s$Xr = s$Xr - compute_Xb(X, (s$alpha[l,] * s$mu[l,]))
       #compute residuals
       R = Y - s$Xr
       print('calling single effect regression')
@@ -35,8 +38,10 @@ update_each_effect <- function (X, Y, s, estimate_prior_variance=FALSE,
       s$KL[l] <- -res$loglik + SER_posterior_e_loglik(X,R,s$sigma2,res$alpha*res$mu,res$alpha*res$mu2)
       s$beta[l] <- s$rho*activated_effect_susie_ann_likelihood(X, Y, s, l) / ((1-s$rho)*deactivated_effect_susie_ann_likelihood(X, Y, s, l) + s$rho * activated_effect_susie_ann_likelihood(X, Y, s))
       
-      
-      s$Xr <- s$Xr + compute_Xb(X, (s$beta[l] * s$alpha[l,] * s$mu[l,]))
+      if (s$extended_model)
+        s$Xr <- s$Xr + compute_Xb(X, (s$beta[l] * s$alpha[l,] * s$mu[l,]))
+      else
+        s$Xr <- s$Xr + compute_Xb(X, (s$alpha[l,] * s$mu[l,]))
       print("done looping through 1 effect")
     }
   }

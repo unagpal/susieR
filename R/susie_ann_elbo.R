@@ -34,24 +34,37 @@ alpha_from_pi_bf <- function(pi, bf){
 
 #Function executing gradient-based optimization of ELBO w.r.t 
 #annotation weights w. Returns updated annotation weights.
-gradient_opt_annotation_weights <- function(X,Y,A,annotation_weights,s,elbo_opt_steps_per_itr, step_size=0.001){
+gradient_opt_annotation_weights <- function(X,Y,A,is_extended,annotation_weights,s,elbo_opt_steps_per_itr, step_size=0.001){
   for (itr in 1:elbo_opt_steps_per_itr){
     #print("current annotation weights w:")
     #print(annotation_weights)
-    elbo_gradient <- grad(elbo_extended, x=annotation_weights, X=X, Y=Y, A=A, susie_fit=s)
+    if (is_extended)
+      elbo_gradient <- grad(elbo_extended, x=annotation_weights, X=X, Y=Y, A=A, susie_fit=s)
+    else
+      elbo_gradient <- grad(elbo_basic, x=annotation_weights, X=X, Y=Y, A=A, susie_fit=s)
     #print("elbo gradient:")
     #print(elbo_gradient)
     #print("current elbo:")
     #print(elbo(X, Y, A, annotation_weights, s))
     annotation_weights = annotation_weights + step_size * elbo_gradient
   }
-  optimized_elbo <- elbo_extended(X, Y, A, annotation_weights, s)
-  #Calculating pi and alpha from annotation weights and annotations
-  pi_rho <- pi_rho_from_annotation_weights(A, annotation_weights, length(s$beta))
-  pi <- pi_rho$pi
-  rho <- pi_rho$rho
+  if (is_extended){
+    optimized_elbo <- elbo_extended(X, Y, A, annotation_weights, s)
+    #Calculating pi and alpha from annotation weights and annotations
+    pi_rho <- pi_rho_from_annotation_weights(A, annotation_weights, length(s$beta))
+    pi <- pi_rho$pi
+    rho <- pi_rho$rho
+  }
+  else{
+    optimized_elbo <- elbo_basic(X, Y, A, annotation_weights, s)
+    #Calculating pi from annotation weights and annotations
+    pi <- pi_from_annotation_weights(A, annotation_weights)
+  }
   alpha <- alpha_from_pi_bf(pi, s$var_lbf)
-  return (list(annot_weights=annotation_weights, pi=pi, rho=rho, alpha=alpha, elbo=optimized_elbo))
+  if (is_extended)
+    return (list(annot_weights=annotation_weights, pi=pi, rho=rho, alpha=alpha, elbo=optimized_elbo))
+  else
+    return (list(annot_weights=annotation_weights, pi=pi, alpha=alpha, elbo=optimized_elbo))
 }
 
 #Calculating ELBO for extended SuSiE-Ann; 

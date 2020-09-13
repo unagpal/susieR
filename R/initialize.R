@@ -24,7 +24,7 @@ susie_init_coef = function(coef_index, coef_value, p) {
 }
 
 # @title Set default susie initialization
-init_setup = function(n, p, L, rho, scaled_prior_variance, residual_variance, prior_weights, null_weight, varY, standardize) {
+init_setup = function(n, p, L, extended_model, rho, scaled_prior_variance, residual_variance, prior_weights, null_weight, varY, standardize) {
   if (!is.numeric(scaled_prior_variance) || scaled_prior_variance < 0)
     stop("Scaled prior variance should be positive number.")
   if (scaled_prior_variance > 1 && standardize == TRUE)
@@ -43,17 +43,32 @@ init_setup = function(n, p, L, rho, scaled_prior_variance, residual_variance, pr
   if(length(prior_weights) != p)
     stop("Prior weights must have length p.")
   if (p < L) L = p
-  s = list(alpha=matrix(1/p,nrow=L,ncol=p),
-           beta=rep(rho,L),
-           mu=matrix(0,nrow=L,ncol=p),
-           mu2=matrix(0,nrow=L,ncol=p),
-           Xr=rep(0,n), KL=rep(NA,L),
-           lbf=rep(NA,L),
-           var_lbf=matrix(NA, nrow=L, ncol=p),
-           sigma2=residual_variance,
-           V=scaled_prior_variance * varY,
-           pi=prior_weights,
-           rho=rho)
+  #Beta and rho are only present if we are considering
+  #the extended SuSiE-Ann model
+  if (extended_model){
+    s = list(extended_model = TRUE, alpha=matrix(1/p,nrow=L,ncol=p),
+             beta=rep(rho,L),
+             mu=matrix(0,nrow=L,ncol=p),
+             mu2=matrix(0,nrow=L,ncol=p),
+             Xr=rep(0,n), KL=rep(NA,L),
+             lbf=rep(NA,L),
+             var_lbf=matrix(NA, nrow=L, ncol=p),
+             sigma2=residual_variance,
+             V=scaled_prior_variance * varY,
+             pi=prior_weights,
+             rho=rho)
+  }
+  else{
+    s = list(extended_model = FALSE, alpha=matrix(1/p,nrow=L,ncol=p),
+             mu=matrix(0,nrow=L,ncol=p),
+             mu2=matrix(0,nrow=L,ncol=p),
+             Xr=rep(0,n), KL=rep(NA,L),
+             lbf=rep(NA,L),
+             var_lbf=matrix(NA, nrow=L, ncol=p),
+             sigma2=residual_variance,
+             V=scaled_prior_variance * varY,
+             pi=prior_weights)    
+  }
   if (is.null(null_weight)) s$null_index = 0
   else s$null_index = p
   class(s) = 'susie'

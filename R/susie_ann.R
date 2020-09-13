@@ -16,8 +16,14 @@ sigmoid <- function(vec){
   return (1/(1+exp(-vec)))
 }
 
+#' Obtaining pi from annotation weights w and annotation weights A
+#' in basic SuSiE-Ann
+pi_from_annotation_weights <- function(A, annotation_weights){
+  return (exp(A %*% annotation_weights)/sum(exp(A %*% annotation_weights)))
+}
+
 #' Obtaining pi and rho from annotation weights w and annotations A
-#' (and number of effects L)
+#' (and number of effects L) for extended SuSiE-Ann
 pi_rho_from_annotation_weights <- function(A, annotation_weights, L){
   tilda_pi = 1 - sigmoid((-A %*% annotation_weights[1:ncol(A)]))^(1/L)
   rho = sum(tilda_pi)
@@ -66,7 +72,7 @@ generate_toy_data <- function(beta, corr, noise_ratio, annot_signal_ratio, n){
 
 #' Function executing alternating optimization of SuSiE-Ann model
 #' Currently gradient_opt_annotation_weights is a placeholder function
-susie_ann <- function(X,Y, A,
+susie_ann <- function(X,Y, A, extended_model,
                   annotation_weights=NULL, rho=0.2,
                   L = min(10,ncol(X)),
                   scaled_prior_variance=0.2, residual_variance=NULL,
@@ -86,19 +92,25 @@ susie_ann <- function(X,Y, A,
                   verbose=FALSE,track_fit=FALSE) {
   A = cbind(A, rep(1, nrow(A)))
   all_annotation_weight_elbo <- rep(0, susie_ann_opt_itr)
-  all_iter_rho <- rep(0, susie_ann_opt_itr)
-  if (!is.null(annotation_weights)){
-    if (pi_rho_from_annotation_weights(A, annotation_weights[1:ncol(A)], L)$rho > 1){
-      stop("Specified annotation weights are invalid; rho must be between 0 and 1")
+  if (extended_model){
+    all_iter_rho <- rep(0, susie_ann_opt_itr)
+    if (!is.null(annotation_weights)){
+      if (pi_rho_from_annotation_weights(A, annotation_weights[1:ncol(A)], L)$rho > 1){
+        stop("Specified annotation weights are invalid; rho must be between 0 and 1")
+      }
     }
+    else
+      annotation_weights = init_annotation_weights_from_rho(A, L, rho)
+      print("Initialized annotation weights from rho and they equal: ")
+      print(annotation_weights)
   }
-  else
-    annotation_weights = init_annotation_weights_from_rho(A, L, rho)
-    print("Initialized annotation weights from rho and they equal: ")
-    print(annotation_weights)
+  else{
+    if (is.null(annotation_weights))
+      annotation_weights = c(0, ncol(A))
+  }
   for (susie_ann_itr in 1:susie_ann_opt_itr){
-    if (susie_ann_itr > 1 | !is.null(s_init)){
-      s_init <- susie(X,Y,L=L,rho=rho,
+    if (!is.null(s_init)){
+      s_init <- susie(X,Y,extended_model, L=L,rho=rho,
                  scaled_prior_variance=scaled_prior_variance, residual_variance=residual_variance,
                  prior_weights=pi, null_weight=null_weight,
                  standardize=standardize,intercept=intercept,
@@ -114,10 +126,12 @@ susie_ann <- function(X,Y, A,
     }
     else{
       print("Obtaining pi from annotation weights:")
-      print(pi_rho_from_annotation_weights(A, annotation_weights,L)$pi)
-      s_init <- susie(X,Y,L=L,rho=rho,
+      if (extended_model)
+        print(pi_rho_from_annotation_weights(A, annotation_weights,L)$pi)
+      else
+        print(pi_from_annotation_weights(A, annotation_weights))
+      s_init <- susie(X,Y,extended_model, L=L,rho=rho,
                  scaled_prior_variance=scaled_prior_variance, residual_variance=residual_variance,
-                 #prior_weights=pi_rho_from_annotation_weights(A, annotation_weights,L)$pi, 
                  prior_weights=prior_weights,
                  null_weight=null_weight,
                  standardize=standardize,intercept=intercept,
@@ -131,17 +145,21 @@ susie_ann <- function(X,Y, A,
                  na.rm = na.rm, max_iter=max_iter,tol=tol,
                  verbose=verbose,track_fit=track_fit)
       print("Done initializing SuSiE in first iteration")
-      print(s_init$beta)
+      #print(s_init$beta)
     } 
-    opt_annot_weights_results <- gradient_opt_annotation_weights(X,Y,A,annotation_weights,s_init,elbo_opt_steps_per_itr)
-    annotation_weights <- opt_annot_weights_results$annot_weights
+    opt_annot_weights_results <- gradient_opt_annotation_weights(X,Y,A,extended_model, annotation_weights,s_init,elbo_opt_steps_per_itr)
     all_annotation_weight_elbo[susie_ann_itr] = opt_annot_weights_results$elbo
-    updated_pi_rho <- pi_rho_from_annotation_weights(A, annotation_weights,L)
-    pi <- updated_pi_rho$pi
-    rho <- updated_pi_rho$rho
-    all_iter_rho[susie_ann_itr] = rho
-    s_init$pi = opt_annot_weights_results$pi/sum(opt_annot_weights_results$pi)
-    s_init$rho = min(c(opt_annot_weights_results$rho, 1))
+    annotation_weights <- opt_annot_weights_results$annot_weights
+    #updated_pi_rho <- pi_rho_from_annotation_weights(A, annotation_weights, L)
+    pi <- opt_annot_weights_results$annot_weights
+    if (extended_model){
+      rho <- updated_pi_rho$rho
+      all_iter_rho[susie_ann_itr] = rho
+      s_init$rho=rho
+    }
+    #s_init$pi = opt_annot_weights_results$pi/sum(opt_annot_weights_results$pi)
+    #s_init$rho = min(c(opt_annot_weights_results$rho, 1))
+    s_init$pi = pi
     s_init$alpha = opt_annot_weights_results$alpha
     print("Finished one alternating optimization iteration")
   }
@@ -162,7 +180,7 @@ print(dim(X))
 print(dim(y))
 print(crossprod(y, X))
 print("Defined X and Y; now calling susie_ann")
-susie_ann_res <- susie_ann(X,y,A,rho=0.1, L=1)
+susie_ann_res <- susie_ann(X,y,A, FALSE, rho=0.1, L=1)
 res = susie_ann_res$susie_model
 #coef(res)
 plot(y,predict(res))
