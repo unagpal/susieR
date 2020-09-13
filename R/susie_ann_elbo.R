@@ -20,6 +20,18 @@ pi_rho_from_annotation_weights <- function(A, annotation_weights, L){
   return (list(pi=pi, rho=rho))
 }
 
+#Calculates Lxp matrix alpha based on p-vector pi and 
+#Lxp matrix bf containing Bayes factors for each effect
+alpha_from_pi_bf <- function(pi, bf){
+  p <- length(pi)
+  L <- nrow(bf)
+  alpha <- matrix(1/p, nrow=L, ncol=p)
+  for (i in 1:L){
+    alpha[i,] = (pi*bf[i,])/sum(pi*bf[i,])
+  }
+  return (alpha)
+}
+
 #Function executing gradient-based optimization of ELBO w.r.t 
 #annotation weights w. Returns updated annotation weights.
 gradient_opt_annotation_weights <- function(X,Y,A,annotation_weights,s,elbo_opt_steps_per_itr, step_size=0.001){
@@ -59,35 +71,30 @@ elbo_basic <- function(X,Y,A,annotation_weights,susie_fit){
   residual_variance <- susie_fit%sigma2
   elbo_first_term <- -1/(2*residual_variance) * norm(Y - X %*% post_avg_b, type="2")^2
   #Calculating second term of ELBO
-  elbo_second_term <- 0
+  scaled_elbo_second_term <- 0
   for (l in 1:L){
-    for (i in 1:n){
-      expected_product <- 0
-      for (j in 1:p){
-        expected_product = expected_product + susie_fit$beta[l] * alpha[l,j] * X[i,j] * susie_fit$mu[l,j]
-      }
-      deactivated_contrib <- (1-susie_fit$beta[l]) * expected_product^2
-      activated_contrib <- 0
-      for (j in 1:p){
-        sigma2_lj <- susie_fit$mu2[l,j] - susie_fit$mu[l,j]^2
-        activated_contrib = activated_contrib + susie_fit$beta[l] * alpha[l,j] * ((expected_product - X[i,j]*susie_fit$mu[l,j])^2 + (X[i,j]^2 * sigma2_lj))
-      }
-      elbo_second_term = elbo_second_term + activated_contrib + deactivated_contrib
+    post_avg_b_l = alpha[l,] * susie_fit$mu[l,]
+    scaled_elbo_second_term = scaled_elbo_second_term - norm(X %*% post_avg_b_l, type="2")^2
+    for (j in 1:p){
+      mu2_lj <- susie_fit$mu[l,j]^2
+      sigma2_lj <- susie_fit$mu2[l,j] - susie_fit$mu[l,j]^2
+      scaled_elbo_second_term = scaled_elbo_second_term + norm(X[,j], type="2")^2 * alpha[l,j] * (mu2_lj + sigma2_lj)
     }
   }
+  elbo_second_term <- -1/(2*residual_variance) * scaled_elbo_second_term
   #Calculating third term of ELBO (note: this term is undefined if pi[j]=alpha_lj=0)
   elbo_third_term <- 0
   for (l in 1:L){
-    beta_l <- susie_fit$beta[l]
     for (j in 1:p){
       alpha_lj <- alpha[l,j]
+      elbo_third_term = elbo_third_term + alpha_lj/2 * (1 + log((susie_fit$mu2[l,j] - susie_fit$mu[l,j]^2)/susie_fit$V) - susie_fit$mu2[l,j]/susie_fit$V)
       #This conditional technically should not be here according to the formula
       #but avoids the ELBO being undefined
       if (alpha_lj != 0){
-        elbo_third_term = elbo_third_term + beta_l * alpha_lj * log((rho * pi[j])/(beta_l * alpha_lj))
+        elbo_third_term = elbo_third_term + alpha_lj * log(pi[j]/alpha_lj)
       }
       else
-        print("Error: third term of ELBO undefined")
+        print("Error: third term of ELBO undefined due to alpha_lj=0")
     }
   }
   return (elbo_first_term + elbo_second_term + elbo_third_term)
@@ -112,48 +119,42 @@ elbo_extended <- function(X,Y,A,annotation_weights,susie_fit){
   residual_variance <- susie_fit%sigma2
   elbo_first_term <- -1/(2*residual_variance) * norm(Y - X %*% post_avg_b, type="2")^2
   #Calculating second term of ELBO
-  elbo_second_term <- 0
+  scaled_elbo_second_term <- 0
   for (l in 1:L){
     for (i in 1:n){
       expected_product <- 0
       for (j in 1:p){
         expected_product = expected_product + susie_fit$beta[l] * alpha[l,j] * X[i,j] * susie_fit$mu[l,j]
       }
-      deactivated_contrib <- (1-susie_fit$beta[l]) * expected_product^2
+      deactivated_contrib <- expected_product^2
       activated_contrib <- 0
       for (j in 1:p){
         sigma2_lj <- susie_fit$mu2[l,j] - susie_fit$mu[l,j]^2
-        activated_contrib = activated_contrib + susie_fit$beta[l] * alpha[l,j] * ((expected_product - X[i,j]*susie_fit$mu[l,j])^2 + (X[i,j]^2 * sigma2_lj))
+        activated_contrib = activated_contrib +  alpha[l,j] * ((expected_product - X[i,j]*susie_fit$mu[l,j])^2 + (X[i,j]^2 * sigma2_lj))
       }
-      elbo_second_term = elbo_second_term + activated_contrib + deactivated_contrib
+      scaled_elbo_second_term = scaled_elbo_second_term + susie_fit$beta[l]*activated_contrib + (1-susie_fit$beta[l]) * deactivated_contrib
     }
   }
+  elbo_second_term <- -1/(2*residual_variance) * scaled_elbo_second_term
   #Calculating third term of ELBO (note: this term is undefined if pi[j]=alpha_lj=0)
   elbo_third_term <- 0
+  #The beta_l and alpha_lj conditionals technically should not be here according to the formula
+  #but prevent the ELBO from being undefined
   for (l in 1:L){
     beta_l <- susie_fit$beta[l]
+    if (beta_l != 0 && beta_l != 1)
+      elbo_third_term = elbo_third_term + (1-beta_l) * log((1-rho)/(1-beta_l)) + beta_l * log(rho/beta_l)
+    else
+      print("Error: third term of ELBO undefined due to beta_l=0 or 1")
     for (j in 1:p){
       alpha_lj <- alpha[l,j]
-      #This conditional technically should not be here according to the formula
-      #but avoids the ELBO being undefined
-      if (alpha_lj != 0){
-        elbo_third_term = elbo_third_term + beta_l * alpha_lj * log((rho * pi[j])/(beta_l * alpha_lj))
-      }
+      sigma2_lj <- susie_fit$mu2[l,j] - susie_fit$mu[l,j]^2
+      if (alpha_lj != 0)
+        elbo_third_term = elbo_third_term + beta_l * alpha_lj * (log(pi[j]/alpha_lj) + 1/2 + log(sigma2_lj/susie_fit$V) - susie_fit$mu2[l,j]/susie_fit$V)
       else
-        print("Error: third term of ELBO undefined")
+        print("Error: third term of ELBO undefined due to alpha_lj=0")
     }
   }
   return (elbo_first_term + elbo_second_term + elbo_third_term)
 }
 
-#Calculates Lxp matrix alpha based on p-vector pi and 
-#Lxp matrix bf containing Bayes factors for each effect
-alpha_from_pi_bf <- function(pi, bf){
-  p <- length(pi)
-  L <- nrow(bf)
-  alpha <- matrix(1/p, nrow=L, ncol=p)
-  for (i in 1:L){
-    alpha[i,] = (pi*bf[i,])/sum(pi*bf[i,])
-  }
-  return (alpha)
-}
