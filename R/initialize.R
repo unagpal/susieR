@@ -45,6 +45,10 @@ init_setup = function(n, p, L, extended_model, rho, scaled_prior_variance, resid
   if (p < L) L = p
   #Beta and rho are only present if we are considering
   #the extended SuSiE-Ann model
+  print("Value of L in initialize:")
+  print(L)
+  print("value of p in initialize:")
+  print(p)
   if (extended_model){
     s = list(extended_model = TRUE, alpha=matrix(1/p,nrow=L,ncol=p),
              beta=rep(rho,L),
@@ -72,29 +76,38 @@ init_setup = function(n, p, L, extended_model, rho, scaled_prior_variance, resid
   if (is.null(null_weight)) s$null_index = 0
   else s$null_index = p
   class(s) = 'susie'
+  print("THIS SHOULD NOT PRINT.")
   return(s)
 }
 
 # @title Update a susie fit object in order to initialize susie model.
 init_finalize = function(s, X=NULL, Xr=NULL) {
+  print('THIS SHOULD HOPEFULLY PRINT')
+  print(s)
+  print(s$V)
+  print(s$alpha)
+  print(nrow(s$alpha))
   if(length(s$V) == 1)
     s$V = rep(s$V, nrow(s$alpha))
+  print("C0")
   ## check sigma2
   if (!is.numeric(s$sigma2))
     stop("Input residual variance `sigma2` must be numeric")
   ## avoid problems with dimension if input is a 1 by 1 matrix
   s$sigma2 = as.numeric(s$sigma2)
+  print("C1")
   if (length(s$sigma2) != 1)
     stop("Input residual variance `sigma2` must be a scalar")
   if (s$sigma2 <= 0)
     stop("residual variance `sigma2` must be positive (is your var(Y) zero?)")
   ## check that 0<= beta_l <= 1 for all effects l
-  if (!all(s$beta >= 0.0 & s$beta <= 1.0)){
+  if (s$extended_model && !all(s$beta >= 0.0 & s$beta <= 1.0)){
     print(s$beta)
     stop("posterior effect inclusion probabilities beta_l must all be between 0 and 1")
   }
+  print("C2")
   ## check that 0 <= rho <= 1
-  if (s$rho<0 || s$rho>1)
+  if (s$extended_model && (s$rho<0 || s$rho>1))
     stop("prior effect inclusion probability rho must be between 0 and 1")
   ## check prior variance
   if (!is.numeric(s$V))
@@ -108,6 +121,7 @@ init_finalize = function(s, X=NULL, Xr=NULL) {
   if (nrow(s$alpha) != length(s$V))
     stop("Input prior variance V must have length of nrow of alpha in input object")
   ## update Xr
+  print("C3")
   if (!missing(Xr))
     s$Xr = Xr
   if (!missing(X))
@@ -116,5 +130,6 @@ init_finalize = function(s, X=NULL, Xr=NULL) {
   s$KL = rep(NA, nrow(s$alpha))
   s$lbf = rep(NA, nrow(s$alpha))
   class(s) = 'susie'
+  print('THIS DEFINITELY SHOULD NOT PRINT')
   return(s)
 }

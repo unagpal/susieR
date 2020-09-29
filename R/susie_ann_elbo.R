@@ -5,10 +5,21 @@
 library(numDeriv)
 #' source("SuSiE-Ann/susieR/R/susie_ann.R")
 
+#logsumexp and softmax taken from https://gist.github.com/aufrank/83572
+#note: numerical stability is important for softmax
+logsumexp <- function (x) {
+  y = max(x)
+  y + log(sum(exp(x - y)))
+}
+
+softmax <- function (x) {
+  exp(x - logsumexp(x))
+}
+
 #' Obtaining pi from annotation weights w and annotation weights A
 #' in basic SuSiE-Ann
 pi_from_annotation_weights <- function(A, annotation_weights){
-  return (exp(A %*% annotation_weights)/sum(exp(A %*% annotation_weights)))
+  return (softmax(A %*% annotation_weights))
 }
 
 #' Obtaining pi and rho from annotation weights w and annotations A
@@ -23,48 +34,65 @@ pi_rho_from_annotation_weights <- function(A, annotation_weights, L){
 #Calculates Lxp matrix alpha based on p-vector pi and 
 #Lxp matrix bf containing Bayes factors for each effect
 alpha_from_pi_bf <- function(pi, bf){
+  #print('printingproblematic bf in alpha from pi bf')
   p <- length(pi)
   L <- nrow(bf)
+  #print(bf)
+  #print(pi)
+  #print(p)
   alpha <- matrix(1/p, nrow=L, ncol=p)
+  #print(alpha)
   for (i in 1:L){
     alpha[i,] = (pi*bf[i,])/sum(pi*bf[i,])
   }
+  print('ending alpha from pi bf')
   return (alpha)
 }
 
 #Function executing gradient-based optimization of ELBO w.r.t 
 #annotation weights w. Returns updated annotation weights.
-gradient_opt_annotation_weights <- function(X,Y,A,is_extended,annotation_weights,s,elbo_opt_steps_per_itr, step_size=0.001){
+gradient_opt_annotation_weights <- function(X_lst,Y_lst,A,is_extended,annotation_weights,susie_fits, batch_size, elbo_opt_steps_per_itr, step_size=0.01){
+  alpha <- list()
   for (itr in 1:elbo_opt_steps_per_itr){
     #print("current annotation weights w:")
     #print(annotation_weights)
-    if (is_extended)
-      elbo_gradient <- grad(elbo_extended, x=annotation_weights, X=X, Y=Y, A=A, susie_fit=s)
-    else
-      elbo_gradient <- grad(elbo_basic, x=annotation_weights, X=X, Y=Y, A=A, susie_fit=s)
-    #print("elbo gradient:")
-    #print(elbo_gradient)
-    #print("current elbo:")
-    #print(elbo(X, Y, A, annotation_weights, s))
-    annotation_weights = annotation_weights + step_size * elbo_gradient
+    elbo_gradient <- grad(cross_locus_elbo, x=annotation_weights, X_lst=X_lst, Y_lst=Y_lst, A=A, susie_fits=susie_fits, is_extended=is_extended, batch_size=batch_size)
+    annotation_weights <- annotation_weights + step_size * elbo_gradient
   }
+  optimized_elbo <- cross_locus_elbo(X_lst,Y_lst,A,annotation_weights, susie_fits, is_extended, batch_size)
   if (is_extended){
-    optimized_elbo <- elbo_extended(X, Y, A, annotation_weights, s)
     #Calculating pi and alpha from annotation weights and annotations
-    pi_rho <- pi_rho_from_annotation_weights(A, annotation_weights, length(s$beta))
+    pi_rho <- pi_rho_from_annotation_weights(A, annotation_weights, length(susie_fits[1]$beta))
     pi <- pi_rho$pi
     rho <- pi_rho$rho
   }
   else{
-    optimized_elbo <- elbo_basic(X, Y, A, annotation_weights, s)
     #Calculating pi from annotation weights and annotations
-    pi <- pi_from_annotation_weights(A, annotation_weights)
+    pi <- as.vector(softmax(A %*% annotation_weights))
+    print("Pi:")
+    print(pi)
   }
-  alpha <- alpha_from_pi_bf(pi, s$var_lbf)
+  for (i in 1:length(X_lst)){
+    alpha[[i]] <- alpha_from_pi_bf(pi, susie_fits[[i]]$var_lbf)    
+  }
+
   if (is_extended)
     return (list(annot_weights=annotation_weights, pi=pi, rho=rho, alpha=alpha, elbo=optimized_elbo))
   else
     return (list(annot_weights=annotation_weights, pi=pi, alpha=alpha, elbo=optimized_elbo))
+}
+
+#batch_size is number of randomly-selected loci for gradient descent step
+cross_locus_elbo <- function(X_lst,Y_lst,A,annotation_weights, susie_fits, is_extended, batch_size){
+  elbo <- 0
+  selected_locus_indices <- sample(1:length(X_lst), batch_size)
+  for (locus_index in selected_locus_indices){
+    if (!is_extended)
+      elbo = elbo + elbo_basic(X_lst[[locus_index]], Y_lst[[locus_index]], A, annotation_weights, susie_fits[[locus_index]])
+    else
+      elbo = elbo + elbo_extended(X_lst[[locus_index]], Y_lst[[locus_index]], A, annotation_weights, susie_fits[[locus_index]])
+  }
+  return (elbo)
 }
 
 #Calculating ELBO for extended SuSiE-Ann; 
@@ -73,15 +101,27 @@ elbo_basic <- function(X,Y,A,annotation_weights,susie_fit){
   L <- nrow(susie_fit$var_lbf)
   p <- ncol(susie_fit$var_lbf)
   #Calculating pi and alpha from annotation weights and annotations
-  pi <- pi_from_annotation_weights(A, annotation_weights)
+  pi <- softmax(A %*% annotation_weights)
+  print('this is where the problem is')
+  print(susie_fit$var_lbf)
+  print(pi)
+  print(annotation_weights)
+  print(A)
   alpha <- alpha_from_pi_bf(pi, susie_fit$var_lbf)
+  print('this shouldnt print')
   #Calculating first term of ELBO
   post_avg_b <- rep(0, p)
   for (l in 1:L){
     post_avg_b = post_avg_b + alpha[l,] * susie_fit$mu[l,]
   }
   post_avg_b = matrix(post_avg_b, nrow=length(post_avg_b), ncol=1)
-  residual_variance <- susie_fit%sigma2
+  residual_variance <- susie_fit$sigma2
+  print("posterior average predictions:")
+  print(alpha)
+  print(post_avg_b)
+  print(X %*% post_avg_b)
+  print("true output:")
+  print(Y)
   elbo_first_term <- -1/(2*residual_variance) * norm(Y - X %*% post_avg_b, type="2")^2
   #Calculating second term of ELBO
   scaled_elbo_second_term <- 0
@@ -129,7 +169,7 @@ elbo_extended <- function(X,Y,A,annotation_weights,susie_fit){
     post_avg_b = post_avg_b + susie_fit$beta[l] * alpha[l,] * susie_fit$mu[l,]
   }
   post_avg_b = matrix(post_avg_b, nrow=length(post_avg_b), ncol=1)
-  residual_variance <- susie_fit%sigma2
+  residual_variance <- susie_fit$sigma2
   elbo_first_term <- -1/(2*residual_variance) * norm(Y - X %*% post_avg_b, type="2")^2
   #Calculating second term of ELBO
   scaled_elbo_second_term <- 0
