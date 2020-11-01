@@ -31,16 +31,14 @@ update_each_effect <- function (X, Y, s, estimate_prior_variance=FALSE,
       s$mu2[l,] <- res$mu2
       s$V[l] <- res$V
       s$lbf[l] <- res$lbf_model
-      print('value of lbf in update_each_effect')
-      print(res$lbf)
       s$var_lbf[l,] <- exp(res$lbf)
-      print('value of saved bf in update_each_effect')
-      print(s$var_lbf[l,])
       s$KL[l] <- -res$loglik + SER_posterior_e_loglik(X,R,s$sigma2,res$alpha*res$mu,res$alpha*res$mu2)
-      s$beta[l] <- s$rho*activated_effect_susie_ann_likelihood(X, Y, s, l) / ((1-s$rho)*deactivated_effect_susie_ann_likelihood(X, Y, s, l) + s$rho * activated_effect_susie_ann_likelihood(X, Y, s))
       
-      if (s$extended_model)
+      
+      if (s$extended_model){
+        s$beta[l] <- s$rho*activated_effect_susie_ann_likelihood(X, Y, s, l) / ((1-s$rho)*deactivated_effect_susie_ann_likelihood(X, Y, s, l) + s$rho * activated_effect_susie_ann_likelihood(X, Y, s))
         s$Xr <- s$Xr + compute_Xb(X, (s$beta[l] * s$alpha[l,] * s$mu[l,]))
+      }
       else
         s$Xr <- s$Xr + compute_Xb(X, (s$alpha[l,] * s$mu[l,]))
     }

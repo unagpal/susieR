@@ -3,6 +3,9 @@
 #' weights w
 
 library(rootSolve)
+library(faux)
+library(LaplacesDemon)
+library(clusterGeneration)
 #source("SuSiE-Ann/susieR/R/set_X_attributes.R")
 #source("SuSiE-Ann/susieR/R/initialize.R")
 #source("SuSiE-Ann/susieR/R/update_each_effect.R")
@@ -71,6 +74,47 @@ generate_toy_data <- function(beta, corr, noise_ratio, annot_signal_ratio, n){
   return (list(X=cbind(x1, x2), Y=y, A=A, effect_inclusions=effect_inclusion))
 }
 
+#Correlation absolute values ~ Beta(2,5)
+#Correlation signs ~ Bernoulli(0.5)
+generate_synthetic_data_basic <- function(pve, n, p, L, num_loci, num_annotations){
+  output = list()
+  w <- rnorm(num_annotations, mean = 0, sd = 1.5)
+  A = matrix(0, nrow=p, ncol=num_annotations)
+  for (i in 1:p)
+    A[i,] <- rbinom(num_annotations, 1, 0.1)
+  pi <- softmax(A %*% w)
+  for (k in 1:num_loci){
+    random_cov_matrix = genPositiveDefMat(dim=p, covMethod="eigen")$Sigma
+    #random_cov_matrix <- rWishart(1,p,diag(p))
+    random_corr_matrix <- matrix(0, nrow=p, ncol=p)
+    for (i in 1:p){
+      for (j in 1:p){
+        random_corr_matrix[i,j] <- random_cov_matrix[i,j]/(sqrt(random_cov_matrix[i,i])*sqrt(random_cov_matrix[j,j]))
+      }
+    }
+    random_corr_matrix = round(random_corr_matrix,3)
+    X <- rnorm_multi(n = n,
+                       mu = 0,
+                       sd = 1,
+                       r = random_corr_matrix,
+                       varnames = c(1:p),
+                       empirical = FALSE)
+    b <- as.matrix(rep(0, p))
+    for (l in 1:L){
+      selected_variable <- rmultinom(1,1,pi)
+      selected_var_ind <- match(1, selected_variable)
+      b[selected_var_ind] = rnorm(1)
+    }
+    var_xb <- var(as.matrix(X) %*% b)
+    sigma <- sqrt((1/pve - 1)*var_xb)
+    Y = as.matrix(X) %*% b + rnorm(n, sd=sigma)
+    print(Y)
+    output[[k]] <- list(X=as.matrix(X), Y=as.matrix(Y), b=b, sigma=sigma)
+  }
+  return (list(A=A, w=w, pi=pi, output=output))
+}
+
+
 #' Function executing alternating optimization of SuSiE-Ann model
 #' Currently gradient_opt_annotation_weights is a placeholder function
 susie_ann <- function(X_lst,Y_lst, A, num_loci, extended_model, batch_size,
@@ -113,6 +157,8 @@ susie_ann <- function(X_lst,Y_lst, A, num_loci, extended_model, batch_size,
     if (is.null(annotation_weights))
       annotation_weights = rep(0, ncol(A))
   }
+  all_itr_pi <- list()
+  all_itr_alpha <- list()
   for (susie_ann_itr in 1:susie_ann_opt_itr){
     if (!is.null(s_init_lst)){
       for (l in 1:num_loci){
@@ -138,9 +184,11 @@ susie_ann <- function(X_lst,Y_lst, A, num_loci, extended_model, batch_size,
       else
         print(pi_from_annotation_weights(A, annotation_weights))
       s_init_lst <- list()
+      
       for (l in 1:num_loci){
+        print(residual_variance)
         s_init_lst[[l]] <- susie(X_lst[[l]],Y_lst[[l]],extended_model, L=L,rho=rho,
-                   scaled_prior_variance=scaled_prior_variance, residual_variance=residual_variance,
+                   #scaled_prior_variance=scaled_prior_variance, residual_variance=residual_variance,
                    prior_weights=prior_weights,
                    null_weight=null_weight,
                    standardize=standardize,intercept=intercept,
@@ -157,8 +205,15 @@ susie_ann <- function(X_lst,Y_lst, A, num_loci, extended_model, batch_size,
       print("Done initializing SuSiE in first iteration")
       #print(s_init$beta)
     } 
-    print(s_init_lst[[1]])
-    opt_annot_weights_results <- gradient_opt_annotation_weights(X_lst,Y_lst,A,extended_model, annotation_weights,s_init_lst,batch_size,elbo_opt_steps_per_itr)
+    #for (l in 1:num_loci){
+      #print("Optimized SuSiE Model for Locus Number:")
+      #print(l)
+      #print(s_init_lst[[1]])
+    #}
+    if (susie_ann_itr != susie_ann_opt_itr)
+      opt_annot_weights_results <- gradient_opt_annotation_weights(X_lst,Y_lst,A,extended_model, annotation_weights,s_init_lst,batch_size,elbo_opt_steps_per_itr)
+    else
+      opt_annot_weights_results <- gradient_opt_annotation_weights(X_lst,Y_lst,A,extended_model, annotation_weights,s_init_lst,batch_size,elbo_opt_steps_per_itr, run_until_convergence=TRUE)
     print("Done calling gradient opt")
     all_annotation_weight_elbo[susie_ann_itr] = opt_annot_weights_results$elbo
     annotation_weights <- opt_annot_weights_results$annot_weights
@@ -170,6 +225,7 @@ susie_ann <- function(X_lst,Y_lst, A, num_loci, extended_model, batch_size,
         s_init_lst[[i]]$rho=rho
       }
     }
+    all_itr_pi[[susie_ann_itr]] <- pi[1]
     #s_init$pi = opt_annot_weights_results$pi/sum(opt_annot_weights_results$pi)
     #s_init$rho = min(c(opt_annot_weights_results$rho, 1))
     #print("pi before gradient update:")
@@ -177,71 +233,43 @@ susie_ann <- function(X_lst,Y_lst, A, num_loci, extended_model, batch_size,
     for (i in 1:num_loci){
       s_init_lst[[i]]$pi=pi
       s_init_lst[[i]]$alpha = opt_annot_weights_results$alpha[[i]]
+      #print("alpha that is being set to alpha for susie fit:")
+      #print(opt_annot_weights_results$alpha[[i]])
     }
+    all_itr_alpha[[l]] <- s_init_lst[[1]]$alpha[[1]]
+    #print("all alphas:")
+    #print(opt_annot_weights_results$alpha)
     #print("pi after gradient update:")
     #print('alpha after gradient update:')
     #print(s_init$alpha)
+    print("Initial ELBO:")
+    print(opt_annot_weights_results$initial_elbo)
     print("ELBO:")
     print(opt_annot_weights_results$elbo)
+    print("One alternating optimization iteration complete")
+    if (susie_ann_itr == susie_ann_opt_itr){
+      s_final_lst <- list()
+      for (l in 1:num_loci){
+        s_final_lst[[l]] <- susie(X_lst[[l]],Y_lst[[l]],extended_model, L=L,rho=rho,
+                                  scaled_prior_variance=scaled_prior_variance, residual_variance=residual_variance,
+                                  prior_weights=synth_data$pi, null_weight=null_weight,
+                                  standardize=standardize,intercept=intercept,
+                                  estimate_residual_variance=estimate_residual_variance,
+                                  estimate_prior_variance = estimate_prior_variance,
+                                  estimate_prior_method = estimate_prior_method,
+                                  check_null_threshold=check_null_threshold, prior_tol=prior_tol,
+                                  residual_variance_upperbound = residual_variance_upperbound,
+                                  s_init = s_init_lst[[l]],coverage=coverage,min_abs_corr=min_abs_corr,
+                                  compute_univariate_zscore = compute_univariate_zscore,
+                                  na.rm = na.rm, max_iter=max_iter,tol=tol,
+                                  verbose=verbose,track_fit=track_fit)
+      }
+      correct_answer_opt_annot_weights_results <- gradient_opt_annotation_weights(X_lst,Y_lst,A,extended_model, synth_data$w,s_final_lst,batch_size,0)
+      print("Initial ELBO with right annot. weights")
+      print(correct_answer_opt_annot_weights_results$initial_elbo)
+      print("Final ELBO with right annot. weights")
+      print(correct_answer_opt_annot_weights_results$elbo)
+    }
   }
-  return(list(susie_model=s_init_lst, w=annotation_weights, final_pi=pi, elbo_values=all_annotation_weight_elbo, all_rho=all_iter_rho))
+  return(list(susie_model=s_init_lst, w=annotation_weights, final_pi=pi, all_iter_pi=all_itr_pi, all_iter_alpha=all_itr_alpha, elbo_values=all_annotation_weight_elbo, all_rho=all_iter_rho))
 }
-
-# #Test Case 1: SuSiE-Ann example based on SuSiE vignette
-# set.seed(1)
-# n = 20
-# p = 3
-# b = rep(0,p)
-# A = matrix(c(0,1,1,0,1,1), nrow=3, ncol=2)
-# print("Defined matrix A")
-# b[2] = 3
-# X = matrix(rnorm(n*p),nrow=n,ncol=p)
-# y = X %*% b + rnorm(n)
-# print(dim(X))
-# print(dim(y))
-# #print(crossprod(y, X))
-# print("Defined X and Y; now calling susie_ann")
-# susie_ann_res <- susie_ann(X,y,A, FALSE, rho=0.1, L=1)
-# res = susie_ann_res$susie_model
-# #coef(res)
-# plot(y,predict(res))
-# plot(1:100, susie_ann_res$elbo_values)
-#print(res)
-
-# Test Case 2: Toy data for p=2
-#(beta, corr, noise_ratio, annot_signal_ratio, n)
-toy_data_1 <- generate_toy_data(1.0, 0.9, 0.5, 5, 5)
-toy_data_2 <- generate_toy_data(1.0, 0.9, 0.5, 5, 5)
-susie_ann_res <- susie_ann(list(toy_data_1$X, toy_data_2$X), list(toy_data_1$Y, toy_data_2$Y), toy_data_1$A, 2, FALSE, 1, L=1, susie_ann_opt_itr=opt_itr)
-
-# print("Printing toy data:")
-# print(toy_data$X)
-# print(toy_data$Y)
-# print(toy_data$A)
-# print(dim(toy_data$Y))
-# opt_itr <- 30
-# L <- 2
-# susie_ann_res <- susie_ann(toy_data$X, toy_data$Y, toy_data$A, rho=0.1, L=L, susie_ann_opt_itr=opt_itr)
-# optimized_susie_model <- susie_ann_res$susie_model
-# print("Beta:")
-# print(optimized_susie_model$beta)
-# print("Pi:")
-# print(susie_ann_res$final_pi)
-# print("Alpha (Lxp):")
-# print(optimized_susie_model$alpha)
-# print("Mu (Lxp):")
-# print(optimized_susie_model$mu)
-# print("w:")
-# print(susie_ann_res$w)
-# print("rho:")
-# print(susie_ann_res$all_rho[opt_itr])
-# plot(1:opt_itr, susie_ann_res$all_rho, xlab="Alternating optimization iteration", ylab="Rho from optimized w")
-# plot(1:opt_itr, susie_ann_res$elbo_values, xlab="Alternating optimization iteration", ylab="Optimized ELBO")
-# 
-# post_mean_coef = rep(0, ncol(toy_data$X))
-# for (l in 1:L){
-#   post_mean_coef = post_mean_coef + optimized_susie_model$beta[l] * optimized_susie_model$alpha * optimized_susie_model$mu
-# }
-# print("Posterior mean regression coefficients:")
-# print(t(post_mean_coef))
-# plot(toy_data$X %*% t(post_mean_coef), toy_data$Y, xlab="Average model predictions", ylab="Output")
