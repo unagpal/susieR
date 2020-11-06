@@ -1,0 +1,25 @@
+---
+title: "susie_ann_synthetic_exp_v2.R"
+output: html_document
+---
+
+## Basic SuSiE-Ann Synthetic Experiments
+
+```{r}
+susie_ann_opt_itr <- 2
+num_trials <- 1
+all_pi_1_true <- rep(0, num_trials)
+all_pi_1_est <- rep(0, num_trials)
+n <- 5
+p <- 10
+num_annotations <- 10
+pve <- 0.4
+num_loci <- 3
+L <- 2
+synth_data <- generate_synthetic_data_basic(pve, n, p, l, num_loci, num_annotations)
+res <- susie_ann(synth_data$susie_ann_X, synth_data$susie_ann_Y, synth_data$A, num_loci, FALSE, num_loci, L=l, susie_ann_opt_itr = susie_ann_opt_itr, elbo_opt_steps_per_itr = 10)
+analyze_susie_ann_fit(res, synth_data)
+
+```
+
+Stuff

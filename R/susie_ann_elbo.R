@@ -51,50 +51,67 @@ alpha_from_pi_bf <- function(pi, bf){
 
 #Function executing gradient-based optimization of ELBO w.r.t 
 #annotation weights w. Returns updated annotation weights.
-gradient_opt_annotation_weights <- function(X_lst,Y_lst,A,is_extended,annotation_weights,susie_fits, batch_size, elbo_opt_steps_per_itr, run_until_convergence=FALSE, step_size=0.05){
+gradient_opt_annotation_weights <- function(X_lst,Y_lst,A_lst,is_extended,annotation_weights,susie_fits, batch_size, elbo_opt_steps_per_itr, run_until_convergence=TRUE, step_size=0.1){
   alpha <- list()
-  initial_elbo <- cross_locus_elbo(X_lst,Y_lst,A,annotation_weights, susie_fits, is_extended, batch_size)
+  num_loci <- length(X_lst)
+  initial_elbo <- cross_locus_elbo(X_lst,Y_lst,A_lst,annotation_weights, susie_fits, is_extended, batch_size)
   if (run_until_convergence==TRUE){
     convergence <- FALSE
-    convergence_epsilon <- 0.0005
+    convergence_epsilon <- 0.005
     itr <- 1
-    while (convergence==FALSE || itr <= elbo_opt_steps_per_itr){
+    while (convergence==FALSE && itr<10*elbo_opt_steps_per_itr){
+      print("Running until convergence, starting new itr")
     #for (itr in 1:elbo_opt_steps_per_itr){
       #print("current annotation weights w:")
       #print(annotation_weights)
-      elbo_gradient <- grad(cross_locus_elbo, x=annotation_weights, X_lst=X_lst, Y_lst=Y_lst, A=A, susie_fits=susie_fits, is_extended=is_extended, batch_size=batch_size)
+      elbo_gradient <- grad(cross_locus_elbo, x=annotation_weights, X_lst=X_lst, Y_lst=Y_lst, A=A_lst, susie_fits=susie_fits, is_extended=is_extended, batch_size=batch_size)
       previous_annotation_weights <- annotation_weights
       annotation_weights <- annotation_weights + step_size * elbo_gradient
+      elbo_improvement <- cross_locus_elbo(X_lst,Y_lst,A_lst,annotation_weights, susie_fits, is_extended, batch_size) - cross_locus_elbo(X_lst,Y_lst,A_lst,previous_annotation_weights, susie_fits, is_extended, batch_size)
+      print("Improvement in ELBO for running till convergence itr:")
+      print(elbo_improvement)
       itr = itr + 1
-      if (norm(annotation_weights - previous_annotation_weights, type="2") < convergence_epsilon){
+      previous_annotation_weight_norm <- norm(previous_annotation_weights, type="2")
+      #Can toggle between two convergence criteria: 1) convergence of ELBO 2) convergence of w vector
+      if (elbo_improvement < 0.01){
+      #if (norm(annotation_weights - previous_annotation_weights, type="2") < convergence_epsilon*previous_annotation_weight_norm){
         convergence = TRUE
       }
     }
   }
   else{
     for (itr in 1:elbo_opt_steps_per_itr){
-      elbo_gradient <- grad(cross_locus_elbo, x=annotation_weights, X_lst=X_lst, Y_lst=Y_lst, A=A, susie_fits=susie_fits, is_extended=is_extended, batch_size=batch_size)
+      elbo_gradient <- grad(cross_locus_elbo, x=annotation_weights, X_lst=X_lst, Y_lst=Y_lst, A=A_lst, susie_fits=susie_fits, is_extended=is_extended, batch_size=batch_size)
       previous_annotation_weights <- annotation_weights
       annotation_weights <- annotation_weights + step_size * elbo_gradient
       itr = itr + 1
     }
   }
-  optimized_elbo <- cross_locus_elbo(X_lst,Y_lst,A,annotation_weights, susie_fits, is_extended, batch_size)
+  optimized_elbo <- cross_locus_elbo(X_lst,Y_lst,A_lst,annotation_weights, susie_fits, is_extended, batch_size)
+  pi <- list()
   if (is_extended){
     #Calculating pi and alpha from annotation weights and annotations
-    pi_rho <- pi_rho_from_annotation_weights(A, annotation_weights, length(susie_fits[1]$beta))
+    pi_rho <- pi_rho_from_annotation_weights(A_lst, annotation_weights, length(susie_fits[1]$beta))
     pi <- pi_rho$pi
     rho <- pi_rho$rho
   }
   else{
-    #Calculating pi from annotation weights and annotations
-    pi <- as.vector(softmax(A %*% annotation_weights))
-    #print("Pi:")
-    #print(pi)
+    for (l in 1:num_loci){
+      #Calculating pi from annotation weights and annotations
+      pi[[l]] <- as.vector(softmax(A_lst[[l]] %*% annotation_weights))
+      #print("Pi:")
+      #print(pi)
+    }
   }
   for (i in 1:length(X_lst)){
-    alpha[[i]] <- alpha_from_pi_bf(pi, susie_fits[[i]]$var_lbf)    
+    alpha[[i]] <- alpha_from_pi_bf(pi[[l]], susie_fits[[i]]$var_lbf)    
   }
+  print('in susie_ann_elbo: shape of alpha after alpha from pi bf:')
+  print(dim(alpha[[1]]))
+  print('shape of pi:')
+  print(dim(pi[[1]]))
+  print('shape of var_lbf:')
+  print(dim(susie_fits[[1]]$var_lbf))
   if (is_extended)
     return (list(annot_weights=annotation_weights, pi=pi, rho=rho, alpha=alpha, elbo=optimized_elbo, initial_elbo=initial_elbo))
   else
@@ -102,17 +119,17 @@ gradient_opt_annotation_weights <- function(X_lst,Y_lst,A,is_extended,annotation
 }
 
 #batch_size is number of randomly-selected loci for gradient descent step
-cross_locus_elbo <- function(X_lst,Y_lst,A,annotation_weights, susie_fits, is_extended, batch_size){
+cross_locus_elbo <- function(X_lst,Y_lst,A_lst,annotation_weights, susie_fits, is_extended, batch_size){
   elbo <- 0
   selected_locus_indices <- sample(1:length(X_lst), batch_size)
   for (locus_index in selected_locus_indices){
     if (!is_extended){
-      elbo = elbo + elbo_basic(X_lst[[locus_index]], Y_lst[[locus_index]], A, annotation_weights, susie_fits[[locus_index]])
+      elbo = elbo + elbo_basic(X_lst[[locus_index]], Y_lst[[locus_index]], A_lst[[locus_index]], annotation_weights, susie_fits[[locus_index]])
       #print("current elbo while being summed across models:")
       #print(elbo)
     }
     else
-      elbo = elbo + elbo_extended(X_lst[[locus_index]], Y_lst[[locus_index]], A, annotation_weights, susie_fits[[locus_index]])
+      elbo = elbo + elbo_extended(X_lst[[locus_index]], Y_lst[[locus_index]], A_lst[[locus_index]], annotation_weights, susie_fits[[locus_index]])
   }
   return (elbo)
 }

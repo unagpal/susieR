@@ -10,13 +10,13 @@ source("SuSiE-Ann/susieR/R/susie_ann.R")
 #}
 #synth_A = synth_data$A
 #num_loci <- 5
-susie_ann_opt_itr <- 50
+susie_ann_opt_itr <- 5
 num_trials <- 1
 all_pi_1_true <- rep(0, num_trials)
 all_pi_1_est <- rep(0, num_trials)
-n <- 10
-p <- 2
-num_annotations <- 4
+n <- 100
+p <- 10
+num_annotations <- 15
 for (pve in c(0.4)){
   for (num_loci in c(5)){
     for (l in c(2)){
@@ -42,15 +42,19 @@ for (pve in c(0.4)){
       #print(res$final_pi)
       all_pi_1_true[t] <- synth_data$pi[1]
       all_pi_1_est[t] <- res$final_pi[1]
-      print("KL between pi:")
-      print(KLD(res$final_pi, synth_data$pi)$sum.KLD.px.py)
-      print("Predicted pi:")
-      print(res$final_pi)
-      print("True pi:")
-      print(synth_data$pi)
-      print("All iter pi:")
-      print(res$all_iter_pi)
-      
+      for (l in 1:num_loci){
+        print("KL divergence for lth locus:")
+        print(KLD(res$final_pi[[l]], synth_data$pi[[l]])$sum.KLD.px.py)
+        print("Predicted pi for lth locus:")
+        print(res$final_pi[[l]])
+        print("True pi for lth locus:")
+        print(synth_data$pi[[l]])
+        
+      }
+      all_iter_pi_1_1 <- rep(0, susie_ann_opt_itr)
+      for (itr in 1:susie_ann_opt_itr){
+        all_iter_pi_1_1[itr] = res$all_iter_pi[[itr]][1]
+      }
       #plot(res$final_pi[1], synth_data$pi[1])
       plot(susie_ann_Y[[1]],predict(res$susie_model[[1]]))
       print("Annotations matrix A:")
@@ -68,7 +72,7 @@ for (pve in c(0.4)){
   }
 }
 #plot(all_pi_1_est, all_pi_1_true)
-plot(1:length(res$all_iter_pi), res$all_iter_pi)
+plot(1:length(res$all_iter_pi), all_iter_pi_1_1)
 #plot (1:length(res$all_iter_alpha), res$all_iter_alpha)
 
 # #Test Case 1: SuSiE-Ann example based on SuSiE vignette
