@@ -3,23 +3,101 @@ title: "susie_ann_synthetic_exp_v2.R"
 output: html_document
 ---
 
-## Basic SuSiE-Ann Synthetic Experiments
+## Basic SuSiE-Ann Synthetic Experiments: investigating performance dependence on PVE, n, L, etc.
+
 
 ```{r}
-susie_ann_opt_itr <- 2
-num_trials <- 1
-all_pi_1_true <- rep(0, num_trials)
-all_pi_1_est <- rep(0, num_trials)
-n <- 5
-p <- 10
-num_annotations <- 10
-pve <- 0.4
-num_loci <- 3
-L <- 2
-synth_data <- generate_synthetic_data_basic(pve, n, p, l, num_loci, num_annotations)
-res <- susie_ann(synth_data$susie_ann_X, synth_data$susie_ann_Y, synth_data$A, num_loci, FALSE, num_loci, L=l, susie_ann_opt_itr = susie_ann_opt_itr, elbo_opt_steps_per_itr = 10)
+susie_ann_opt_itr <- 1
+#num_trials <- 1
+#all_pi_1_true <- rep(0, num_trials)
+#all_pi_1_est <- rep(0, num_trials)
+#n <- 100
+n <- 100
+#p <- 1000
+p <- 1000
+num_annotations <- 20
+pve <- 0.6
+num_loci <- 1500
+#num_loci <- 100
+batch_size <- 10
+L <- 3
+synth_data <- generate_synthetic_data_basic(pve, n, p, L, num_loci, num_annotations)
+print(dim(synth_data$A_lst[[1]]))
+print("Checking if any X or A is undefined.")
+any(is.na(synth_data$susie_ann_X))
+any(is.na(synth_data$A_lst[1]))
+#print(synth_data$susie_ann_X)
+#print(synth_data$susie_ann_Y)
+res <- susie_ann(synth_data$susie_ann_X, synth_data$susie_ann_Y, synth_data$A, num_loci, FALSE, batch_size, L=L, susie_ann_opt_itr = susie_ann_opt_itr, elbo_opt_steps_per_itr = 10)
 analyze_susie_ann_fit(res, synth_data)
+```
+
+
+```{r}
+
+#Very basic example showing SuSiE-Ann being preferable to SuSiE.
+num_itr <- 100
+L <- 1
+sum_pi_1 <- c(0,0,0,0)
+sum_pi_2 <- c(0,0,0,0)
+sum_alpha_1 <- c(0,0,0,0)
+sum_alpha_2 <- c(0,0,0,0)
+sum_susie_alpha_1 <- matrix(0, nrow=L, ncol=4)
+sum_susie_alpha_2 <- matrix(0, nrow=L, ncol=4)
+sum_susie_pi_1 <- matrix(0, nrow=L, ncol=4)
+sum_susie_pi_2 <- matrix(0, nrow=L, ncol=4)
+for (itr in 1:num_itr){
+  synth_data <- contrived_example(10)
+  res <- susie_ann(synth_data$susie_ann_X, synth_data$susie_ann_Y, synth_data$A, 2, FALSE, 2, L=1, susie_ann_opt_itr = 1, elbo_opt_steps_per_itr = 10)
+  sum_pi_1 = sum_pi_1 + res$final_pi[[1]]
+  sum_pi_2 = sum_pi_2 + res$final_pi[[2]]
+  susie_res_1 <- (res$raw_susie_results)[[1]]
+  susie_res_2 <- (res$raw_susie_results)[[2]]
+  sum_susie_alpha_1 = sum_susie_alpha_1 + susie_res_1$alpha
+  sum_susie_alpha_2 = sum_susie_alpha_2 + susie_res_2$alpha
+  sum_susie_pi_1 = sum_susie_pi_1 + susie_res_1$pi
+  sum_susie_pi_2 = sum_susie_pi_2 + susie_res_2$pi
+  sum_alpha_1 = sum_alpha_1 + (res$susie_models[[1]])$alpha
+  sum_alpha_2 = sum_alpha_2 + (res$susie_models[[2]])$alpha
+}
+print("Average SuSiE-Ann Pi:")
+print(sum_pi_1 / num_itr )
+print(sum_pi_2 / num_itr)
+
+print("Average SuSiE-Ann Alpha:")
+print(sum_alpha_1/num_itr)
+print(sum_alpha_2/num_itr)
+
+print("Average SuSiE Pi:")
+print(sum_susie_pi_1/num_itr)
+print(sum_susie_pi_2/num_itr)
+
+print("Average SuSiE Alpha:")
+print(sum_susie_alpha_1/num_itr)
+print(sum_susie_alpha_2/num_itr)
+#print(res$w)
+#print(res$raw_susie_results)
 
 ```
 
-Stuff
+
+
+```{r}
+print(res$w)
+```
+
+
+```{r}
+#print(res$final_pi)
+#analyze_susie_ann_fit(res, synth_data)
+A <- list()
+B <- list()
+A[[1]] <- c(1,2)
+A[[2]] <- c(2,3)
+B[[1]] <- c(1,1)
+B[[2]] <- c(2,2)
+invisible(A)
+
+
+```
+

@@ -31,10 +31,11 @@ update_each_effect <- function (X, Y, s, estimate_prior_variance=FALSE,
       s$mu2[l,] <- res$mu2
       s$V[l] <- res$V
       s$lbf[l] <- res$lbf_model
-      s$var_lbf[l,] <- exp(res$lbf)
+      #var_lbf records SuSiE log bayes factors for each effect
+      #for numerically stable calculation of SuSiE-Ann ELBO
+      s$var_lbf[l,] <- res$lbf
       s$KL[l] <- -res$loglik + SER_posterior_e_loglik(X,R,s$sigma2,res$alpha*res$mu,res$alpha*res$mu2)
-      
-      
+      #Modified IBSS update to Beta and Residuals for extended SuSiE-Ann/Proposal 2
       if (s$extended_model){
         s$beta[l] <- s$rho*activated_effect_susie_ann_likelihood(X, Y, s, l) / ((1-s$rho)*deactivated_effect_susie_ann_likelihood(X, Y, s, l) + s$rho * activated_effect_susie_ann_likelihood(X, Y, s))
         s$Xr <- s$Xr + compute_Xb(X, (s$beta[l] * s$alpha[l,] * s$mu[l,]))
@@ -47,21 +48,24 @@ update_each_effect <- function (X, Y, s, estimate_prior_variance=FALSE,
   return(s)
 }
 
-#' @title Computes p(y | X, b, beta, prior_variance, residual_variance) approximately where effect l is always activated, that is, beta[l]=1
+#' @title Computes p(y | X, b, beta, prior_variance, residual_variance) for SuSiE-Ann proposal 2
+#' approximately where effect l is always activated, that is, beta[l]=1
 activated_effect_susie_ann_likelihood <- function(X, Y, s, l){
   activated_effect_susie_model <- s
   activated_effect_susie_model$beta[l] <- 1
   return(susie_ann_likelihood(X, Y, activated_effect_susie_model))
 }
 
-#' @title Computes p(y | X, b, beta, prior_variance, residual_variance) approximately where effect l is always deactivated, that is, beta[l]=0
+#' @title Computes p(y | X, b, beta, prior_variance, residual_variance) for SuSiE-Ann proposal 2 approximately 
+#' where effect l is always deactivated, that is, beta[l]=0
 deactivated_effect_susie_ann_likelihood <- function(X, Y, s, l){
   deactivated_effect_susie_model <- s
   deactivated_effect_susie_model$beta[l] <- 0
   return(susie_ann_likelihood(X, Y, deactivated_effect_susie_model))
 }
 
-#' @title Computes p(y | X, b, beta, prior_variance, residual_variance) approximately by drawing from the model posterior
+#' @title Computes p(y | X, b, beta, prior_variance, residual_variance) for SuSiE-Ann proposal 2 approximately 
+#' by drawing from the model posterior
 susie_ann_likelihood <- function(X, Y, s, posterior_draws=500){
   p <- ncol(X)
   L <- nrow(s$alpha)

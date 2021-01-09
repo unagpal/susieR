@@ -32,13 +32,10 @@ init_setup = function(n, p, L, extended_model, rho, scaled_prior_variance, resid
   if(is.null(residual_variance))
     residual_variance = varY
   if(is.null(prior_weights)){
-    print("Found prior weights null and initializing to uniform")
     prior_weights = rep(1/p, p)
   }
   else{
-    #print("normalizing prior weights to:")
     prior_weights = prior_weights / sum(prior_weights)
-    #print(prior_weights)
   }
   if(length(prior_weights) != p)
     stop("Prior weights must have length p.")
@@ -58,6 +55,7 @@ init_setup = function(n, p, L, extended_model, rho, scaled_prior_variance, resid
              pi=prior_weights,
              rho=rho)
   }
+
   else{
     s = list(extended_model = FALSE, alpha=matrix(1/p,nrow=L,ncol=p),
              mu=matrix(0,nrow=L,ncol=p),
