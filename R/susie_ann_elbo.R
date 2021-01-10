@@ -97,7 +97,7 @@ gradient_opt_annotation_weights <- function(X_lst,Y_lst,A_lst,is_extended, optim
     #Optimizing for set number of gradient steps
     else{
       for (itr in 1:elbo_opt_steps_per_itr){
-        elbo_gradient <- grad(cross_locus_elbo, x=annotation_weights, X_lst=X_lst, Y_lst=Y_lst, A_lst=A_lst, susie_fits=susie_fits, is_extended=is_extended, batch_size=batch_size)
+        elbo_gradient <- grad(cross_locus_elbo, x=annotation_weights, X_lst=X_lst, Y_lst=Y_lst, A_lst=A_lst, susie_fits=susie_fits, is_extended=is_extended, batch_size=num_loci)
         previous_annotation_weights <- annotation_weights +  elbo_gradient/(10*norm(elbo_gradient, type="2"))
         annotation_weights <- annotation_weights + step_size * elbo_gradient
         itr = itr + 1
