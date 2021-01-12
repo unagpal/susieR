@@ -317,7 +317,7 @@ generate_synthetic_data_basic <- function(pve, n, p, L, num_loci, num_annotation
 #' Key function executing alternating optimization of SuSiE-Ann model. Optimization of ELBO
 #' with respect to w is in susie_ann_elbo.R. Parameters:
 #' extended_model: FALSE indicates basic SuSiE-Ann/Proposal 0; TRUE indicates extended SuSiE-Ann/Proposal 2
-#' elbo_optim_method: "SGD" or "L-BFGS-B" can be used to optimize ELBO w.r.t. w
+#' elbo_optim_method: "SGD", "L-BFGS-B", or "Adam" can be used to optimize ELBO w.r.t. w
 susie_ann <- function(X_lst,Y_lst, A_lst, num_loci, extended_model, batch_size,
                   annotation_weights=NULL, rho=0.2, 
                   L = min(10,ncol(X)),

@@ -9,6 +9,41 @@ library(SimDesign)
 library(matrixStats)
 #' source("SuSiE-Ann/susieR/R/susie_ann.R")
 
+#Implementation of Adam optimization
+adam <- function(w_0, X_lst, Y_lst, A_lst, susie_fits, is_extended, batch_size, convergence_eps=5e-4, max_itr=5000){
+  alpha<-0.01
+  beta_1<-0.9
+  beta_2<-0.999
+  epsilon <- 1e-8
+  previous_w <- w_0
+  previous_m <- rep(0, length(w_0))
+  previous_v <- rep(0, length(w_0))
+  converged <- FALSE
+  t <- 0
+  while (converged==FALSE && t<max_itr){
+    t = t + 1
+    g_t <- grad(cross_locus_elbo, x=previous_w, X_lst=X_lst, Y_lst=Y_lst, A_lst=A_lst, susie_fits=susie_fits, is_extended=is_extended, batch_size=batch_size)
+    m <- beta_1 * previous_m + (1-beta_1)*g_t
+    v <- beta_2 * previous_v + (1-beta_2) * (g_t)^2
+    m_hat <- m/(1-beta_1^t)
+    v_hat <- v/(1-beta_2^t)
+    w <- previous_w + alpha*m_hat/(sqrt(v_hat)+epsilon)
+    w_change_norm <- norm(w - previous_w, type="2")
+    if (w_change_norm < convergence_eps){
+      converged = TRUE
+    }
+    previous_w = w
+    previous_m = m 
+    previous_v = v
+    if (t %% 10 == 0){
+      print("done with 10 Adam iterations")
+      print(w_change_norm)
+    }
+  }
+  return (w)
+}
+
+
 #logsumexp and softmax taken from https://gist.github.com/aufrank/83572
 #note: numerical stability is important for softmax
 logsumexp <- function (x) {
@@ -60,6 +95,8 @@ gradient_opt_annotation_weights <- function(X_lst,Y_lst,A_lst,is_extended, optim
   alpha <- list()
   #Calculating ELBO prior to optimization of w
   initial_elbo <- cross_locus_elbo(annotation_weights,X_lst,Y_lst,A_lst,susie_fits, is_extended, batch_size)
+  print("Initial ELBO:")
+  print(initial_elbo)
   num_loci <- length(X_lst)
   #Stochastic gradient based ELBO ascent w.r.t. w
   if (optim_method=="SGD"){
@@ -112,15 +149,13 @@ gradient_opt_annotation_weights <- function(X_lst,Y_lst,A_lst,is_extended, optim
     print("Optimized ELBO value:")
     print(optim_res$value)
   }
-  
-  #Adam optimization not yet implemented as I am looking for an R implementation
-  #enabling optimization of a user-specified non-neural-network function
-  #else if (optim_method=="ADAM"){
-    #adam_res <- adam(f=(-1) * cross_locus_elbo, p=annotation_weights, X_lst=X_lst,Y_lst=Y_lst,A_lst=A_lst, susie_fits=susie_fits, is_extended=is_extended, batch_size=batch_size, print.level=0)
-    #annotation_weihgts = adam_res$estimate
-    #print("Optimized ELBO value:")
-    #print(adam_res$minimum)
-  #}
+  #Optimizing via Adam
+  else if (optim_method=="Adam"){
+    annotation_weights <- adam(annotation_weights, X_lst, Y_lst, A_lst, susie_fits, is_extended, batch_size, max_itr=1000)
+    final_elbo <- cross_locus_elbo(annotation_weights,X_lst,Y_lst,A_lst,susie_fits, is_extended, batch_size)
+    print("Final ELBO:")
+    print(final_elbo)
+  }
   optimized_elbo <- cross_locus_elbo(annotation_weights,X_lst,Y_lst,A_lst, susie_fits, is_extended, batch_size)
   pi <- list()
   #Updating pi and rho based on optimized w for each locus, for extended SuSiE-Ann/Proposal 2

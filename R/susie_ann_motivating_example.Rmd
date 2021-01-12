@@ -19,7 +19,7 @@ for (itr in 1:num_itr){
   synth_data<-contrived_example(10, G)
   print(synth_data$A_lst)
   res <- susie_ann(synth_data$susie_ann_X,synth_data$susie_ann_Y, synth_data$A_lst, G, FALSE, G,
-                  L = 1, scaled_prior_variance=1.0, susie_ann_opt_itr=1, elbo_optim_method="ADAM")
+                  L = 1, scaled_prior_variance=1.0, susie_ann_opt_itr=1, elbo_optim_method="Adam")
   all_susie_ann_pi[[itr]] <- res$final_pi
   all_susie_ann_w[[itr]] <- res$w
   all_susie_results <- res$raw_susie_results
