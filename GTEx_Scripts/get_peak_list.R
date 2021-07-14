@@ -1,15 +1,16 @@
 
 #Obtaining list of HepG2 RBPs and corresponding bed file names (before ".bed.gz")
+peak_fname <- "/gpfs/commons/home/unagpal/SuSiE-Ann/Real_Data_Exp/Data_Processing/Annotation_Matrices/"
 rbp_file_metadata <- read.delim("/gpfs/commons/groups/knowles_lab/data/ENCODE_eCLIP/HepG2_replicates.txt", header = TRUE,sep = "\t")
 rbp_list_metadata_unparsed <- sub("\n", "", rbp_file_metadata[,6])
 rbp_list_metadata <- strsplit(rbp_list_metadata_unparsed, "-human")
 rbp_bed_files <- sub("\n", "",rbp_file_metadata[,1])
 unique_rbps <- unique(unlist(rbp_list_metadata))
+write.table(unique_rbps, file =  paste(peak_fname, "unique_rbps.txt",sep=""), sep = "\t")
 num_unique_rbps <- length(unique_rbps)
 #Compiling all chromosome, start pos, and end pos of RBP peaks
 #Three lists below indexed by: 1) RBP index (numerically) 2) chromosome name (via $chr_name)
-peak_fname <- "/gpfs/commons/home/unagpal/SuSiE-Ann/Real_Data_Exp/Data_Processing/Annotation_Matrices/"
-for (rbp_ind in 35:length(unique_rbps)){
+for (rbp_ind in 1:length(unique_rbps)){
   print(rbp_ind)
   rbp <- unique_rbps[rbp_ind]
   start_pos_by_chrom <- list()
