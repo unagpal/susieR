@@ -51,8 +51,6 @@ for (rbp_ind in 1:length(unique_rbps)){
     stop_pos_by_chrom[[chr_name]] = unlist((stop_pos_by_chrom[[chr_name]])[sorted_start_pos_ind])
   }
   rbp_peak_fname <- paste(peak_fname, rbp, sep="")
-  env_start_pos <- as.environment(start_pos_by_chrom)
-  env_stop_pos <- as.environment(stop_pos_by_chrom)
-  save(list = ls(env_start_pos), file = paste(rbp_peak_fname, "_peak_sorted_start_pos_by_chrom.txt", sep=""), envir = env_start_pos)
-  save(list = ls(env_stop_pos), file = paste(rbp_peak_fname, "_peak_sorted_stop_pos_by_chrom.txt", sep=""), envir = env_stop_pos)
+  saveRDS(start_pos_by_chrom, file = paste(rbp_peak_fname, "_peak_sorted_start_pos_by_chrom.txt", sep=""))
+  saveRDS(stop_pos_by_chrom, file = paste(rbp_peak_fname, "_peak_sorted_stop_pos_by_chrom.txt", sep=""))
 }
