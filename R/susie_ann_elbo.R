@@ -8,9 +8,10 @@ library(philentropy)
 library(SimDesign)
 library(matrixStats)
 #' source("SuSiE-Ann/susieR/R/susie_ann.R")
+source("SuSiE-Ann/susieR/R/susie_ann_utils.R")
 
 #Implementation of Adam optimization
-adam <- function(w_0, X_lst, Y_lst, A_lst, susie_fits, is_extended, batch_size, convergence_eps=5e-4, max_itr=5000){
+adam <- function(w_0, X_lst, Y_lst, A_lst, susie_fits, is_extended, opt_alpha, batch_size, l1_sigma_2, l2_sigma_2, convergence_eps=5e-4, max_itr=5000){
   alpha<-0.01
   beta_1<-0.9
   beta_2<-0.999
@@ -22,7 +23,7 @@ adam <- function(w_0, X_lst, Y_lst, A_lst, susie_fits, is_extended, batch_size, 
   t <- 0
   while (converged==FALSE && t<max_itr){
     t = t + 1
-    g_t <- grad(cross_locus_elbo, x=previous_w, X_lst=X_lst, Y_lst=Y_lst, A_lst=A_lst, susie_fits=susie_fits, is_extended=is_extended, batch_size=batch_size)
+    g_t <- grad(cross_locus_elbo, x=previous_w, X_lst=X_lst, Y_lst=Y_lst, A_lst=A_lst, susie_fits=susie_fits, is_extended=is_extended, opt_alpha=opt_alpha, batch_size=batch_size,l1_sigma_2=l1_sigma_2, l2_sigma_2=l2_sigma_2)
     m <- beta_1 * previous_m + (1-beta_1)*g_t
     v <- beta_2 * previous_v + (1-beta_2) * (g_t)^2
     m_hat <- m/(1-beta_1^t)
@@ -35,25 +36,12 @@ adam <- function(w_0, X_lst, Y_lst, A_lst, susie_fits, is_extended, batch_size, 
     previous_w = w
     previous_m = m 
     previous_v = v
-    if (t %% 10 == 0){
+    if (t %% 200 == 0){
       print("done with 10 Adam iterations")
       print(w_change_norm)
     }
   }
   return (w)
-}
-
-
-#logsumexp and softmax taken from https://gist.github.com/aufrank/83572
-#note: numerical stability is important for softmax
-logsumexp <- function (x) {
-  y = max(x)
-  return (y + log(sum(exp(x - y))))
-}
-
-#numerically stable softmax function
-softmax <- function (x) {
-  return (exp(x - logsumexp(x)))
 }
 
 #' Obtaining pi from annotation weights w and annotation matrix A
@@ -90,12 +78,12 @@ alpha_from_pi_bf <- function(pi, bf){
 #annotation weights w. Returns updated annotation weights. Parameters:
 #batch_size: batch size of loci
 #optim_method: optimization method, "SGD" or "L-BFGS-B"
-gradient_opt_annotation_weights <- function(X_lst,Y_lst,A_lst,is_extended, optim_method, annotation_weights,susie_fits, batch_size, elbo_opt_steps_per_itr=100, run_until_convergence=TRUE, step_size=0.1){
+gradient_opt_annotation_weights <- function(X_lst,Y_lst,A_lst,is_extended, optim_method, opt_alpha, annotation_weights,susie_fits, batch_size, l1_sigma_2, l2_sigma_2, elbo_opt_steps_per_itr=100, run_until_convergence=TRUE, step_size=0.1){
   print("Starting gradient optimization of w")
   alpha <- list()
   #Calculating ELBO prior to optimization of w
-  initial_elbo <- cross_locus_elbo(annotation_weights,X_lst,Y_lst,A_lst,susie_fits, is_extended, batch_size)
-  print("Initial ELBO:")
+  initial_elbo <- cross_locus_elbo(annotation_weights,X_lst,Y_lst,A_lst,susie_fits, is_extended, opt_alpha, batch_size, l1_sigma_2, l2_sigma_2)
+  print("Initial ELBO in gradient_opt:")
   print(initial_elbo)
   num_loci <- length(X_lst)
   #Stochastic gradient based ELBO ascent w.r.t. w
@@ -103,13 +91,14 @@ gradient_opt_annotation_weights <- function(X_lst,Y_lst,A_lst,is_extended, optim
     #Running to convergence, typically done in last alternating optimization iteration
     if (run_until_convergence==TRUE){
       convergence <- FALSE
-      convergence_epsilon <- 0.005
+      convergence_epsilon <- 0.01
       itr <- 1
+      elbo_improvement <- Inf
+      previous_annotation_weights <- annotation_weights
       while (convergence==FALSE && itr<10*elbo_opt_steps_per_itr){
-        print("Running until convergence, starting new itr")
+        #print("Running until convergence, starting new itr")
         
-        elbo_gradient <- grad(cross_locus_elbo, x=annotation_weights, X_lst=X_lst, Y_lst=Y_lst, A_lst=A_lst, susie_fits=susie_fits, is_extended=is_extended, batch_size=batch_size)
-        previous_annotation_weights <- annotation_weights
+        elbo_gradient <- grad(cross_locus_elbo, x=annotation_weights, X_lst=X_lst, Y_lst=Y_lst, A_lst=A_lst, susie_fits=susie_fits, is_extended=is_extended, opt_alpha=opt_alpha, batch_size=batch_size, l1_sigma_2 = l1_sigma_2, l2_sigma_2 = l2_sigma_2)
         
         #Can toggle between moving in normalized gradient direction or unnormalized gradient direction
         annotation_weights <- annotation_weights +  elbo_gradient/(100*norm(elbo_gradient, type="2"))
@@ -117,24 +106,28 @@ gradient_opt_annotation_weights <- function(X_lst,Y_lst,A_lst,is_extended, optim
         
         #elbo_improvement <- cross_locus_elbo(X_lst,Y_lst,A_lst,annotation_weights, susie_fits, is_extended, batch_size) - cross_locus_elbo(X_lst,Y_lst,A_lst,previous_annotation_weights, susie_fits, is_extended, batch_size)
         
-        #Seeing/printing improvement in ELBO with each gradient step
-        elbo_improvement <- cross_locus_elbo(annotation_weights,X_lst,Y_lst,A_lst, susie_fits, is_extended, batch_size) - cross_locus_elbo(previous_annotation_weights,X_lst,Y_lst,A_lst, susie_fits, is_extended, batch_size)
-        print("Improvement in ELBO (running till max convergence itr or convergence):")
-        print(elbo_improvement)
-        itr = itr + 1
+        #Seeing/printing improvement in ELBO every certain number of gradient steps
+        if (itr %% 50 == 0){
+          elbo_improvement = cross_locus_elbo(annotation_weights,X_lst,Y_lst,A_lst, susie_fits, is_extended, opt_alpha, batch_size, l1_sigma_2, l2_sigma_2) - cross_locus_elbo(previous_annotation_weights,X_lst,Y_lst,A_lst, susie_fits, is_extended, opt_alpha, batch_size, l1_sigma_2, l2_sigma_2)
+          previous_annotation_weights <- annotation_weights
+          print("Improvement in ELBO (running till max convergence itr or convergence):")
+          print(elbo_improvement)
+        }
         
-        previous_annotation_weight_norm <- norm(previous_annotation_weights, type="2")
+        #previous_annotation_weight_norm <- norm(previous_annotation_weights, type="2")
         #Can toggle between two convergence criteria: 1) convergence of ELBO 2) convergence of w vector
+        #The challenge with checking convergence of the w vector is determining the step size over time
         if (elbo_improvement < convergence_epsilon){
         #if (norm(annotation_weights - previous_annotation_weights, type="2") < convergence_epsilon*previous_annotation_weight_norm){
           convergence = TRUE
         }
+        itr = itr + 1
       }
     }
     #Optimizing for set number of gradient steps
     else{
       for (itr in 1:elbo_opt_steps_per_itr){
-        elbo_gradient <- grad(cross_locus_elbo, x=annotation_weights, X_lst=X_lst, Y_lst=Y_lst, A_lst=A_lst, susie_fits=susie_fits, is_extended=is_extended, batch_size=num_loci)
+        elbo_gradient <- grad(cross_locus_elbo, x=annotation_weights, X_lst=X_lst, Y_lst=Y_lst, A_lst=A_lst, susie_fits=susie_fits, is_extended=is_extended, opt_alpha=opt_alpha, batch_size=num_loci, l1_sigma_2=l1_sigma_2, l2_sigma_2=l2_sigma_2)
         previous_annotation_weights <- annotation_weights +  elbo_gradient/(10*norm(elbo_gradient, type="2"))
         annotation_weights <- annotation_weights + step_size * elbo_gradient
         itr = itr + 1
@@ -143,20 +136,20 @@ gradient_opt_annotation_weights <- function(X_lst,Y_lst,A_lst,is_extended, optim
   }
   #Optimizing via L-BFGS-B
   else if (optim_method=="L-BFGS-B"){
-    optim_res <- optim(par=annotation_weights, fn=cross_locus_elbo, gr = NULL, X_lst=X_lst,Y_lst=Y_lst,A_lst=A_lst, susie_fits=susie_fits, is_extended=is_extended, batch_size=batch_size, method=optim_method, lower = -Inf, upper = Inf,
+    optim_res <- optim(par=annotation_weights, fn=cross_locus_elbo, gr = NULL, X_lst=X_lst,Y_lst=Y_lst,A_lst=A_lst, susie_fits=susie_fits, is_extended=is_extended, opt_alpha=opt_alpha, batch_size=batch_size, l1_sigma_2=l1_sigma_2, l2_sigma_2=l2_sigma_2, method=optim_method, lower = -Inf, upper = Inf,
           control = list(fnscale=-1))
     annotation_weights = optim_res$par
-    print("Optimized ELBO value:")
-    print(optim_res$value)
   }
   #Optimizing via Adam
   else if (optim_method=="Adam"){
-    annotation_weights <- adam(annotation_weights, X_lst, Y_lst, A_lst, susie_fits, is_extended, batch_size, max_itr=1000)
-    final_elbo <- cross_locus_elbo(annotation_weights,X_lst,Y_lst,A_lst,susie_fits, is_extended, batch_size)
-    print("Final ELBO:")
-    print(final_elbo)
+    annotation_weights <- adam(annotation_weights, X_lst, Y_lst, A_lst, susie_fits, is_extended, opt_alpha, batch_size, l1_sigma_2, l2_sigma_2, max_itr=1000)
+    final_elbo <- cross_locus_elbo(annotation_weights,X_lst,Y_lst,A_lst,susie_fits, is_extended, opt_alpha, batch_size, l1_sigma_2, l2_sigma_2)
   }
-  optimized_elbo <- cross_locus_elbo(annotation_weights,X_lst,Y_lst,A_lst, susie_fits, is_extended, batch_size)
+  optimized_elbo <- cross_locus_elbo(annotation_weights,X_lst,Y_lst,A_lst, susie_fits, is_extended, opt_alpha, batch_size, l1_sigma_2, l2_sigma_2)
+  print("Optimized ELBO value:")
+  print(optimized_elbo)
+  print("Optimized w:")
+  print(annotation_weights)
   pi <- list()
   #Updating pi and rho based on optimized w for each locus, for extended SuSiE-Ann/Proposal 2
   if (is_extended){
@@ -179,8 +172,6 @@ gradient_opt_annotation_weights <- function(X_lst,Y_lst,A_lst,is_extended, optim
     log_alpha <- log_pi_bf - rowLogSumExps(log_pi_bf)
     alpha[[l]] <- exp(log_alpha)
   }
-  print("Returned alpha from SuSiE-Ann:")
-  print(alpha)
   if (is_extended)
     return (list(annot_weights=annotation_weights, pi=pi, rho=rho, alpha=alpha, elbo=optimized_elbo, initial_elbo=initial_elbo))
   else
@@ -190,16 +181,16 @@ gradient_opt_annotation_weights <- function(X_lst,Y_lst,A_lst,is_extended, optim
 #The SuSiE-Ann ELBO function, based on random subsampling of the loci, that is optimized. Parameters:
 #batch_size: number of randomly-selected loci for each gradient descent step
 #is_extended: True indicates SuSiE-Ann extended/Proposal 2, False indicates basic SuSiE-Ann/Proposal 0
-cross_locus_elbo <- function(annotation_weights,X_lst,Y_lst,A_lst, susie_fits, is_extended, batch_size){
+cross_locus_elbo <- function(annotation_weights,X_lst,Y_lst,A_lst, susie_fits, is_extended, opt_alpha, batch_size, l1_sigma_2, l2_sigma_2){
   elbo <- 0
   #Sampling batch_size loci for gradient-based optimization of w
   selected_locus_indices <- sample(1:length(X_lst), batch_size)
   for (locus_index in selected_locus_indices){
     if (!is_extended){
-      elbo = elbo + elbo_basic(X_lst[[locus_index]], Y_lst[[locus_index]], A_lst[[locus_index]], annotation_weights, susie_fits[[locus_index]])
+      elbo = elbo + elbo_basic(X_lst[[locus_index]], Y_lst[[locus_index]], A_lst[[locus_index]], annotation_weights, susie_fits[[locus_index]], opt_alpha, l1_sigma_2, l2_sigma_2)
     }
     else
-      elbo = elbo + elbo_extended(X_lst[[locus_index]], Y_lst[[locus_index]], A_lst[[locus_index]], annotation_weights, susie_fits[[locus_index]])
+      elbo = elbo + elbo_extended(X_lst[[locus_index]], Y_lst[[locus_index]], A_lst[[locus_index]], annotation_weights, susie_fits[[locus_index]], opt_alpha, l1_sigma_2, l2_sigma_2)
   }
   return (elbo)
 }
@@ -275,23 +266,66 @@ cross_locus_elbo <- function(annotation_weights,X_lst,Y_lst,A_lst, susie_fits, i
 # }
 
 #Computes vectorized ELBO for basic SuSiE-Ann (one locus)
-elbo_basic <- function(X,Y,A,annotation_weights,susie_fit){
+elbo_basic <- function(X,Y,A,annotation_weights,susie_fit, opt_alpha, l1_sigma_2, l2_sigma_2){
+  #Assume for now that intercept and standardize are true
+  #Line below parallels set_X_attributes(X,center=intercept, scale=standardize) in susie.R
+  X = set_X_attributes(X,center=TRUE, scale=TRUE)
   L <- nrow(susie_fit$var_lbf)
   p <- ncol(susie_fit$var_lbf)
+  n <- nrow(Y)
   #Calculating pi and alpha from annotation weights and annotations
   #in a numerically stable way (logsumexp)
   pi <- softmax(A %*% annotation_weights)
-  log_pi <- as.vector(log(pi))
-  log_pi_bf <- log_pi + susie_fit$var_lbf
-  log_alpha <- log_pi_bf - rowLogSumExps(log_pi_bf)
-  alpha <- exp(log_alpha)
-  
+  susie_fit$pi <- pi
+  #print("X:")
+  #print(X)
+  #print("Y:")
+  #print(Y)
+  if (opt_alpha == TRUE){
+    log_pi <- as.vector(log(pi))
+    log_pi_bf <- log_pi + susie_fit$var_lbf
+    log_alpha <- log_pi_bf - rowLogSumExps(log_pi_bf)
+    alpha <- exp(log_alpha)
+    susie_fit$alpha <- alpha
+  }
+  susie_fit = update_each_effect(X, Y, susie_fit, estimate_prior_variance=FALSE,match.arg(c("optim","EM","simple")),check_null_threshold=0)
+  reg_LL <- 0
+  if (l2_sigma_2 > 0){
+    reg_LL = reg_LL + sum(dnorm(annotation_weights, mean=0, sd=sqrt(l2_sigma_2), log=TRUE))
+  }
+  else if (l1_sigma_2 > 0){
+    l_scale <- sqrt(0.5*l1_sigma_2);
+    reg_LL = reg_LL + sum(dlaplace(annotation_weights, location=0, scale=l_scale, log=TRUE))
+  }
+  return (reg_LL + get_objective(X,Y,susie_fit))
+}
+
+#Computes vectorized ELBO for basic SuSiE-Ann (one locus)
+elbo_old_basic <- function(X,Y,A,annotation_weights,susie_fit, opt_alpha){
+  L <- nrow(susie_fit$var_lbf)
+  p <- ncol(susie_fit$var_lbf)
+  n <- nrow(Y)
+  #Calculating pi and alpha from annotation weights and annotations
+  #in a numerically stable way (logsumexp)
+  pi <- softmax(A %*% annotation_weights)
+  if (opt_alpha == TRUE){
+    log_pi <- as.vector(log(pi))
+    log_pi_bf <- log_pi + susie_fit$var_lbf
+    log_alpha <- log_pi_bf - rowLogSumExps(log_pi_bf)
+    alpha <- exp(log_alpha)
+  }
+  else if (opt_alpha==FALSE){
+    alpha <- susie_fit$alpha
+  }
+
   #Calculating first term of ELBO
   post_avg_coeff <- alpha * susie_fit$mu
   post_avg_b <- colSums(post_avg_coeff)
   post_avg_b = matrix(post_avg_b, nrow=length(post_avg_b), ncol=1)
   residual_variance <- susie_fit$sigma2
   elbo_first_term <- -1/(2*residual_variance) * norm(Y - X %*% post_avg_b, type="2")^2
+  #Adding term to ELBO that is constant in variational parameters
+  elbo_first_term = elbo_first_term - 1 * (n / 2 ) * log (3.141592653 * 2 * residual_variance)
 
   #Calculating second term of ELBO
   post_average_pred_by_effect <- X %*% t(post_avg_coeff)
@@ -300,7 +334,7 @@ elbo_basic <- function(X,Y,A,annotation_weights,susie_fit){
   X_colnorms_2 = colNorms(X)^2
   scaled_elbo_second_term = scaled_elbo_second_term + sum(X_colnorms_2 * (alpha * susie_fit$mu2))
   elbo_second_term <- -1/(2*residual_variance) * scaled_elbo_second_term
-  
+
   #Calculating third term of ELBO
   moment_ratios <- susie_fit$mu2/susie_fit$V
   log_variance_ratios <- log((susie_fit$mu2 - susie_fit$mu^2)/susie_fit$V)
@@ -310,7 +344,7 @@ elbo_basic <- function(X,Y,A,annotation_weights,susie_fit){
   }
   #print("Overall ELBO:")
   #print(elbo_first_term + elbo_second_term + elbo_third_term)
-  
+
   #Ensuring each term of ELBO is computed properly and is defined
   if (is.na(elbo_first_term))
     print("First term of ELBO is NA")

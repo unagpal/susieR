@@ -1,0 +1,145 @@
+---
+title: "ELBO_Debugging"
+author: "Udai"
+date: "3/4/2021"
+output: html_document
+---
+
+```{r}
+#Comparing ELBO over course of optimization for the 3 optimization methods
+#for motivating example (presented 3/5)
+G <- 6
+alt_opt_itr <- 5
+all_susie_ann_alpha <- list()
+all_susie_ann_pi <- list()
+all_susie_ann_w <- list()
+all_susie_pi <- list()
+all_susie_alpha <- list()
+synth_data<-contrived_example(10, G)
+itr <- 1
+print("Synthetic data A_Lst:")
+print(synth_data$A_lst)
+print("Synthetic data selected variables:")
+print(synth_data$selected_variables)
+for (optim_method in c("SGD", "L-BFGS-B",  "Adam")){
+  print("Now using optimization method:")
+  print(optim_method)
+  res <- susie_ann(synth_data$susie_ann_X,synth_data$susie_ann_Y, synth_data$A_lst, G, FALSE, G,
+                  L = 1, scaled_prior_variance=1.0, susie_ann_opt_itr=alt_opt_itr, elbo_optim_method=optim_method)
+  all_susie_ann_pi[[itr]] <- res$final_pi
+  all_susie_ann_w[[itr]] <- res$w
+  susie_models <- res$susie_models
+  for (g in 1:G)
+    print(res$susie_models[[g]]$alpha)
+  all_susie_results <- res$raw_susie_results
+  locus_susie_pi <- list()
+  locus_susie_alpha <- list()
+  locus_susie_ann_alpha <- list()
+  for (g in 1:G){
+    locus_susie_pi[[g]] <- all_susie_results[[g]]$pi
+    locus_susie_alpha[[g]] <- all_susie_results[[g]]$alpha
+    locus_susie_ann_alpha[[g]] <- res$susie_models[[g]]$alpha
+  }
+  all_susie_pi[[itr]] <- locus_susie_pi
+  all_susie_alpha[[itr]] <- locus_susie_alpha
+  all_susie_ann_alpha[[itr]] <- locus_susie_ann_alpha
+  
+  print("susie alpha")
+  print(locus_susie_alpha)
+  itr = itr + 1
+}
+```
+
+
+```{r}
+#Comparison of optimization methods on a more realistic-scale example
+#First saving SuSiE-Ann models
+susie_ann_opt_itr <- 5
+num_trials <- 1
+all_pi_1_true <- rep(0, num_trials)
+all_pi_1_est <- rep(0, num_trials)
+n <- 100
+p <- 10
+num_annotations <- 5
+for (pve in c(0.4)){
+  for (num_loci in c(10)){
+    for (l in c(2)){
+      print("PVE: ")
+      print(pve)
+      print("Num loci:")
+      print(num_loci)
+      print("L:")
+      print(l)
+      synth_data <- generate_synthetic_data_basic(pve, n, p, l, num_loci, num_annotations)
+      susie_ann_X <- list()
+      susie_ann_Y <- list()
+      for (loc in 1:num_loci){
+        susie_ann_X[[loc]] <- synth_data$output[[loc]]$X
+        susie_ann_Y[[loc]] <- synth_data$output[[loc]]$Y
+      }
+      synth_A = synth_data$A
+      for (opt_method in c("L-BFGS-B")){
+      #for (opt_method in c( "L-BFGS-B", "SGD", "Adam")){
+        res <- susie_ann(susie_ann_X, susie_ann_Y, synth_A, num_loci, FALSE, num_loci, L=l, susie_ann_opt_itr = susie_ann_opt_itr,
+                       elbo_optim_method="L-BFGS-B", elbo_opt_steps_per_itr = 10)
+        analyze_susie_ann_fit(res, synth_data)
+        fname <- ".Rdata"
+        fname = paste(opt_method, fname, sep="")
+        fname = paste("~/SuSiE-Ann/", fname)
+        print(fname)
+        save(res, file=fname)
+      }
+      
+      #print("---------------FINAL RESULTS-----------------")
+      #analyze_susie_ann_fit(res, synth_data)
+      #print("Synthetic data:")
+      #print(synth_data)
+      #print("Final optimized pi:")
+      #print(res$final_pi)
+      #all_pi_1_true[1] <- synth_data$pi[1]
+      #all_pi_1_est[1] <- res$final_pi[1]
+      #for (l in 1:num_loci){
+      #   print("KL divergence for lth locus:")
+      #   print(KLD(res$final_pi[[l]], synth_data$pi[[l]])$sum.KLD.px.py)
+      #   print("Predicted pi for lth locus:")
+      #   print(res$final_pi[[l]])
+      #   print("True pi for lth locus:")
+      #   print(synth_data$pi[[l]])
+      #   
+      # }
+      # all_iter_pi_1_1 <- rep(0, susie_ann_opt_itr)
+      # for (itr in 1:susie_ann_opt_itr){
+      #   all_iter_pi_1_1[itr] = res$all_iter_pi[[itr]][1]
+      # }
+      # #plot(res$final_pi[1], synth_data$pi[1])
+      # plot(susie_ann_Y[[1]],predict(res$susie_model[[1]]))
+      # print("Annotations matrix A:")
+      # print(synth_A)
+      #res$susie_model
+      #print("True pi:")
+      #print(synth_data$pi)
+      #print("True w")
+      #print(synth_data$w)
+      #print("Final optimized w:")
+      #print(res$w)
+      #print("Plotting ELBO")
+      #plot(1:susie_ann_opt_itr, res$elbo_values)
+    }
+  }
+}
+#plot(all_pi_1_est, all_pi_1_true)
+#plot(1:length(res$all_iter_pi), all_iter_pi_1_1)
+```
+
+```{r}
+for (opt_method in c( "L-BFGS-B", "SGD", "Adam")){
+    fname <- ".Rdata"
+    fname = paste(opt_method, fname, sep="")
+    fname = paste("~/SuSiE-Ann/", fname)
+    print(fname)
+    res <- load(fname)
+    print(res$w)
+}
+```
+
+

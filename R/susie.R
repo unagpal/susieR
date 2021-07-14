@@ -169,11 +169,11 @@
 #'
 #' @examples
 #'
-source("SuSiE-Ann/susieR/R/set_X_attributes.R")
-source("SuSiE-Ann/susieR/R/initialize.R")
-source("SuSiE-Ann/susieR/R/update_each_effect.R")
-source("SuSiE-Ann/susieR/R/estimate_residual_variance.R")
-source("SuSiE-Ann/susieR/R/susie_utils.R")
+source("~/SuSiE-Ann/susieR/R/set_X_attributes.R")
+source("~/SuSiE-Ann/susieR/R/initialize.R")
+source("~/SuSiE-Ann/susieR/R/update_each_effect.R")
+source("~/SuSiE-Ann/susieR/R/estimate_residual_variance.R")
+source("~/SuSiE-Ann/susieR/R/susie_utils.R")
 # set.seed(1)
 # n = 1000
 # p = 5
@@ -257,14 +257,16 @@ susie <- function(X,Y, extended_model, L = min(10,ncol(X)), rho=0.5,
     Y = Y-mean_y
   }
   X = set_X_attributes(X,center=intercept, scale=standardize)
+
   # initialize susie fit
-  s = init_setup(n,p,L,extended_model,rho,scaled_prior_variance,residual_variance,prior_weights,null_weight,as.numeric(var(Y)),standardize)
+  s = init_setup(s_init, n,p,L,extended_model,rho,scaled_prior_variance,residual_variance,prior_weights,null_weight,as.numeric(var(Y)),standardize)
   if (!missing(s_init)) {
     s = modifyList(s, s_init)
     s = init_finalize(s, X=X)
   } else {
     s = init_finalize(s)
   }
+  
   #initialize elbo to NA
   elbo = rep(NA,max_iter+1)
   elbo[1] = -Inf;

@@ -24,7 +24,7 @@ susie_init_coef = function(coef_index, coef_value, p) {
 }
 
 # @title Set default susie initialization
-init_setup = function(n, p, L, extended_model, rho, scaled_prior_variance, residual_variance, prior_weights, null_weight, varY, standardize) {
+init_setup = function(s_init, n, p, L, extended_model, rho, scaled_prior_variance, residual_variance, prior_weights, null_weight, varY, standardize) {
   if (!is.numeric(scaled_prior_variance) || scaled_prior_variance < 0)
     stop("Scaled prior variance should be positive number.")
   if (scaled_prior_variance > 1 && standardize == TRUE)
@@ -42,8 +42,14 @@ init_setup = function(n, p, L, extended_model, rho, scaled_prior_variance, resid
   if (p < L) L = p
   #Beta and rho are only present if we are considering
   #the extended SuSiE-Ann model
+  if (is.null(s_init)){
+    alpha_matrix <- matrix(1/p,nrow=L,ncol=p)
+  }
+  else{
+    alpha_matrix <- s_init$alpha
+  }
   if (extended_model){
-    s = list(extended_model = TRUE, alpha=matrix(1/p,nrow=L,ncol=p),
+    s = list(extended_model = TRUE, alpha=alpha_matrix,
              beta=rep(rho,L),
              mu=matrix(0,nrow=L,ncol=p),
              mu2=matrix(0,nrow=L,ncol=p),
@@ -57,7 +63,7 @@ init_setup = function(n, p, L, extended_model, rho, scaled_prior_variance, resid
   }
 
   else{
-    s = list(extended_model = FALSE, alpha=matrix(1/p,nrow=L,ncol=p),
+    s = list(extended_model = FALSE, alpha=alpha_matrix,
              mu=matrix(0,nrow=L,ncol=p),
              mu2=matrix(0,nrow=L,ncol=p),
              Xr=rep(0,n), KL=rep(NA,L),

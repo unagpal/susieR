@@ -5,9 +5,9 @@
 #' @param estimate_prior_variance boolean indicating whether to estimate prior variance
 #' @param check_null_threshold float a threshold on the log scale to compare likelihood between current estimate and zero the null
 #' @keywords internal
-source("SuSiE-Ann/susieR/R/single_effect_regression.R")
-source("SuSiE-Ann/susieR/R/sparse_multiplication.R")
-source("SuSiE-Ann/susieR/R/elbo.R")
+source("~/SuSiE-Ann/susieR/R/single_effect_regression.R")
+source("~/SuSiE-Ann/susieR/R/sparse_multiplication.R")
+source("~/SuSiE-Ann/susieR/R/elbo.R")
 update_each_effect <- function (X, Y, s, estimate_prior_variance=FALSE,
                                 estimate_prior_method="optim",check_null_threshold) {
   if(estimate_prior_variance==FALSE) estimate_prior_method="none"

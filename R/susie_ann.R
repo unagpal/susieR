@@ -5,16 +5,19 @@
 #' Extended SuSiE-Ann and Proposal 2 will be used interchangably
 
 library(rootSolve)
-library(faux)
+#library(faux)
 library(LaplacesDemon)
 library(clusterGeneration)
+#library(SimDesign)
+
 #source("SuSiE-Ann/susieR/R/set_X_attributes.R")
 #source("SuSiE-Ann/susieR/R/initialize.R")
 #source("SuSiE-Ann/susieR/R/update_each_effect.R")
 #source("SuSiE-Ann/susieR/R/estimate_residual_variance.R")
 #source("SuSiE-Ann/susieR/R/susie_utils.R")
-source("SuSiE-Ann/susieR/R/susie.R")
-source("SuSiE-Ann/susieR/R/susie_ann_elbo.R")
+source("~/SuSiE-Ann/susieR/R/susie.R")
+source("~/SuSiE-Ann/susieR/R/susie_ann_elbo.R")
+source("~/SuSiE-Ann/susieR/R/susie_ann_utils.R")
 
 #' Sigmoid function
 sigmoid <- function(vec){
@@ -263,6 +266,84 @@ contrived_example <- function(n, num_loci){
 #correlation matrix with random (positive) Eigenvalues. One alternative could be:
 #Correlation absolute values ~ Beta(2,5)
 #Correlation signs ~ Bernoulli(0.5)
+generate_synthetic_data <- function(pve, n, p, L, num_loci, num_annotations){
+  output = list()
+  w <- rnorm(num_annotations, mean = 0, sd = 1.5)
+  
+  A_lst <- list()
+  pi <- list()
+  z_score_cutoff <- (1-0.1)/1.28
+  annotations_mean <- rep(0.1, num_annotations)
+  for (l in 1:num_loci){
+    random_cov_matrix <- genPositiveDefMat(dim=num_annotations, covMethod="eigen")$Sigma
+    random_cov_matrix = random_cov_matrix*sqrt(z_score_cutoff)/max(random_cov_matrix)
+    A_l = matrix(0, nrow=p, ncol=num_annotations)
+    for (i in 1:p)
+      annot_row <- rmvnorm(n=1, mean=annotations_mean, sigma=random_cov_matrix)
+      for (k in 1:num_annotations){
+        if (annot_row[k] >= 1){
+          annot_row[k] = 1
+        }
+        else{
+          annot_row[k] = 0
+        }
+      }
+      A_l[i,] <- annot_row
+    A_lst[[l]] <- A_l
+    pi[[l]] <- softmax(A_lst[[l]] %*% w)
+  }
+  print("Done creating A")
+  susie_ann_X <- list()
+  susie_ann_Y <- list()
+  all_selected_variables <- list()
+  for (k in 1:num_loci){
+    selected_locus_variables <- matrix(0, nrow=L, ncol=p)
+    random_cov_matrix = genPositiveDefMat(dim=p, covMethod="eigen")$Sigma
+    #random_cov_matrix <- rWishart(1,p,diag(p))
+    random_corr_matrix <- matrix(0, nrow=p, ncol=p)
+    for (i in 1:p){
+      for (j in 1:p){
+        random_corr_matrix[i,j] = random_cov_matrix[i,j]/(sqrt(random_cov_matrix[i,i])*sqrt(random_cov_matrix[j,j]))
+      }
+    }
+    random_corr_matrix = round(random_corr_matrix,3)
+    X <- round(rmvnorm(n=n, mean=rep(1, p), sigma=random_corr_matrix ))
+    print(dim(X))
+    for (obs in 1:n){
+      for (var in 1:p){
+        if (X[obs, var]<0){
+          X[obs, var] = 0
+        }
+        else if (X[obs, var]>2){
+          X[obs, var]= 2
+        }
+      }
+    }
+    b <- as.matrix(rep(0, p))
+    for (l in 1:L){
+      selected_variable <- rmultinom(1,1,pi[[k]])
+      selected_var_ind <- match(1, selected_variable)
+      selected_locus_variables[l,] <- selected_variable
+      b[selected_var_ind] = rnorm(1)
+    }
+    all_selected_variables[[k]] <- selected_locus_variables
+    var_xb <- var(as.matrix(X) %*% b)
+    sigma <- sqrt((1/pve - 1)*var_xb)
+    Y = as.matrix(X) %*% b + rnorm(n, sd=sigma)
+    susie_ann_X[[k]] <- as.matrix(X)
+    susie_ann_Y[[k]] <- as.matrix(Y)
+    #print(Y)
+    output[[k]] <- list(X=as.matrix(X), Y=as.matrix(Y), b=b, sigma=sigma)
+    print("Done creating X, Y, b for one locus")
+  }
+  return (list(susie_ann_X=susie_ann_X, susie_ann_Y=susie_ann_Y, A_lst=A_lst, w=w, pi=pi, output=output, selected_variables=all_selected_variables))
+}
+
+#Function generating synthetic data satisfying a given PVE, n, p, L, G, and 
+#number of annotations K. Currently joint correlation matrix between SNPs is determined
+#correlation matrix with random (positive) Eigenvalues. One alternative could be:
+#Correlation absolute values ~ Beta(2,5)
+#Correlation signs ~ Bernoulli(0.5)
 generate_synthetic_data_basic <- function(pve, n, p, L, num_loci, num_annotations){
   output = list()
   w <- rnorm(num_annotations, mean = 0, sd = 1.5)
@@ -318,6 +399,7 @@ generate_synthetic_data_basic <- function(pve, n, p, L, num_loci, num_annotation
 #' with respect to w is in susie_ann_elbo.R. Parameters:
 #' extended_model: FALSE indicates basic SuSiE-Ann/Proposal 0; TRUE indicates extended SuSiE-Ann/Proposal 2
 #' elbo_optim_method: "SGD", "L-BFGS-B", or "Adam" can be used to optimize ELBO w.r.t. w
+#' opt_alpha: whether optimization of annotation weights w incorporates its effect on alpha
 susie_ann <- function(X_lst,Y_lst, A_lst, num_loci, extended_model, batch_size,
                   annotation_weights=NULL, rho=0.2, 
                   L = min(10,ncol(X)),
@@ -333,12 +415,31 @@ susie_ann <- function(X_lst,Y_lst, A_lst, num_loci, extended_model, batch_size,
                   compute_univariate_zscore = FALSE,
                   na.rm = FALSE, 
                   susie_ann_opt_itr=100,
-                  elbo_optim_method="L-BFGS-B", elbo_opt_steps_per_itr=100,
+                  elbo_optim_method="L-BFGS-B", optim_alpha=TRUE,
+                  elbo_opt_steps_per_itr=100,
+                  reg_type="None",
                   max_iter=100,tol=1e-3,
                   verbose=FALSE,track_fit=FALSE) {
+  if (reg_type == "L1"){
+    l1_sigma_2 <- 4
+    l2_sigma_2 <- 0
+  }
+  else if (reg_type=="L2"){
+    l1_sigma_2 <- 0
+    l2_sigma_2 <- 4
+  }
+  else{
+    l1_sigma_2 <- 0
+    l2_sigma_2 <- 0
+  }
+  
   num_loci <- length(X_lst)
   #Adds an intercept term for w through an extra annotation of value 1
   #for SuSiE-Ann proposal 2
+  if (intercept){
+    for (l in 1:num_loci)
+      Y_lst[[l]] <- Y_lst[[l]] - mean(Y_lst[[l]])
+  }
   if (extended_model){
     for (l in 1:num_loci)
       A_lst[[l]] = cbind(A_lst[[l]], rep(1, nrow(A_lst[[l]])))
@@ -390,10 +491,12 @@ susie_ann <- function(X_lst,Y_lst, A_lst, num_loci, extended_model, batch_size,
                  estimate_prior_method = estimate_prior_method,
                  check_null_threshold=check_null_threshold, prior_tol=prior_tol,
                  residual_variance_upperbound = residual_variance_upperbound,
-                 s_init = s_init_lst[[l]],coverage=coverage,min_abs_corr=min_abs_corr,
+                 s_init = s_init_lst[[l]], coverage=coverage,min_abs_corr=min_abs_corr,
                  compute_univariate_zscore = compute_univariate_zscore,
                  na.rm = na.rm, max_iter=max_iter,tol=tol,
                  verbose=verbose,track_fit=track_fit)
+        print("SuSiE ELBO during IBSS:")
+        print(s_init_lst[[l]]$elbo)
       }
     }
     #Training SuSiE models from scratch in case no pretrained SuSiE models
@@ -416,6 +519,8 @@ susie_ann <- function(X_lst,Y_lst, A_lst, num_loci, extended_model, batch_size,
                    compute_univariate_zscore = compute_univariate_zscore,
                    na.rm = na.rm, max_iter=max_iter,tol=tol,
                    verbose=verbose,track_fit=track_fit)
+        print("SuSiE ELBO during IBSS:")
+        print(s_init_lst[[l]]$elbo)
       }
       print("Done initializing SuSiE in first iteration")
     }
@@ -426,9 +531,9 @@ susie_ann <- function(X_lst,Y_lst, A_lst, num_loci, extended_model, batch_size,
     #If desired, can run until convergence only in the last iteration
     print("Optimizing annotation weights")
     if (susie_ann_itr != susie_ann_opt_itr)
-      opt_annot_weights_results <- gradient_opt_annotation_weights(X_lst,Y_lst,A_lst,extended_model,elbo_optim_method, annotation_weights,s_init_lst,batch_size,elbo_opt_steps_per_itr, run_until_convergence=TRUE)
+      opt_annot_weights_results <- gradient_opt_annotation_weights(X_lst,Y_lst,A_lst,extended_model,elbo_optim_method, optim_alpha, annotation_weights,s_init_lst,batch_size, l1_sigma_2, l2_sigma_2, elbo_opt_steps_per_itr, run_until_convergence=TRUE)
     else
-      opt_annot_weights_results <- gradient_opt_annotation_weights(X_lst,Y_lst,A_lst,extended_model, elbo_optim_method, annotation_weights,s_init_lst,batch_size,elbo_opt_steps_per_itr, run_until_convergence=TRUE)
+      opt_annot_weights_results <- gradient_opt_annotation_weights(X_lst,Y_lst,A_lst,extended_model, elbo_optim_method, optim_alpha, annotation_weights,s_init_lst,batch_size, l1_sigma_2, l2_sigma_2, elbo_opt_steps_per_itr, run_until_convergence=TRUE)
     print("finished optimizing annotation weights")
     #Retrieving initial ELBO, final ELBO, optimized w, and optimized pi
     #from optimization of ELBO w.r.t. w
@@ -459,6 +564,7 @@ susie_ann <- function(X_lst,Y_lst, A_lst, num_loci, extended_model, batch_size,
       s_init_lst[[i]]$pi=pi[[i]]
       s_init_lst[[i]]$alpha = opt_annot_weights_results$alpha[[i]]
     }
+    
     #Tracking alpha for the first locus across alternating optimization iterations
     all_itr_alpha[[l]] <- s_init_lst[[1]]$alpha[[1]]
     #Comparing ELBO prior to optimization of ELBO w.r.t. w to 
@@ -518,11 +624,18 @@ analyze_susie_ann_fit <- function(res, synth_data) {
   all_pval_pi <- rep(0, num_loci)
   all_pi_mae <- rep(0, num_loci)
   all_kl_pi <- rep(0, num_loci)
-  selected_loci_graphs <- sample(1:num_loci, 2)
+  selected_loci_graphs <- sample(1:num_loci, 4)
   for (l in 1:num_loci){
     all_corr_pi[l] <- cor(pred_pi[[l]], actual_pi[[l]])
     fit <- lm(actual_pi[[l]] ~ pred_pi[[l]])
-    all_pval_pi[l] <- summary(fit)$coefficients[2,4]
+    #print(summary(fit)$coefficients)
+    if (var(pred_pi[[l]])==0)
+      all_pval_pi[l] <- 1
+    else
+      all_pval_pi[l] <- summary(fit)$coefficients[2,4]
+    #print("Now indiv")
+    #print(summary(fit)$coefficients[2,4])
+    #all_pval_pi[l] <- summary(fit)$coefficients[2,4]
     if (l %in% selected_loci_graphs){
       plot(pred_pi[[l]], actual_pi[[l]], xlab="Predicted pi", ylab="Actual pi")
     }

@@ -1,108 +1,28 @@
 ---
-title: "susie_ann_motivating_example"
+title: "susie_ann_opt_method_comparison"
 author: "Udai"
-date: "12/15/2020"
+date: "01/13/2021"
 output: html_document
 ---
 
+
 ```{r}
-#Motivating Example for Figure 2 in FOGM project report: 
-#p=4, K=2, changing G (num loci) from 1 to 6
-opt_methods <- c("SGD", "L-BFGS-B", "Adam")
-opt_alpha_vec <- c(TRUE, FALSE)
+#Comparing ELBO over course of optimization for the 3 optimization methods
 G <- 6
-num_itr <- 2
+alt_opt_itr <- 5
 all_susie_ann_alpha <- list()
 all_susie_ann_pi <- list()
 all_susie_ann_w <- list()
 all_susie_pi <- list()
 all_susie_alpha <- list()
 synth_data<-contrived_example(10, G)
-for (opt_method_ind in 2:2){
-  for (opt_alpha_ind in 1:1){
-    opt_method <- opt_methods[opt_method_ind]
-    optim_alpha_val <- opt_alpha_vec[opt_alpha_ind]
-    print("OPT METHOD AND ALPHA INCLUSION:")
-    print(opt_method)
-    print(optim_alpha_val)
-    #print(synth_data$A_lst)
-    res <- susie_ann(synth_data$susie_ann_X,synth_data$susie_ann_Y, synth_data$A_lst, G, FALSE, G,
-                    L = 1, scaled_prior_variance=1.0, susie_ann_opt_itr=num_itr, elbo_optim_method=opt_method,
-                    optim_alpha=optim_alpha_val)
-    all_susie_ann_pi[[itr]] <- res$final_pi
-    all_susie_ann_w[[itr]] <- res$w
-    all_susie_results <- res$raw_susie_results
-    locus_susie_pi <- list()
-    locus_susie_alpha <- list()
-    locus_susie_ann_alpha <- list()
-    for (g in 1:G){
-      locus_susie_pi[[g]] <- all_susie_results[[g]]$pi
-      locus_susie_alpha[[g]] <- all_susie_results[[g]]$alpha
-      locus_susie_ann_alpha[[g]] <- res$susie_models[[g]]$alpha
-    }
-    all_susie_pi[[itr]] <- locus_susie_pi
-    all_susie_alpha[[itr]] <- locus_susie_alpha
-    all_susie_ann_alpha[[itr]] <- locus_susie_ann_alpha
-  }
-  
-  average_susie_ann_pi <- all_susie_ann_pi[[1]]
-  average_susie_ann_w <- all_susie_ann_w[[1]]
-  average_susie_ann_alpha <- all_susie_ann_alpha[[1]]
-  average_susie_pi <- all_susie_pi[[1]]
-  average_susie_alpha <- all_susie_alpha[[1]]
-}
-
-for (itr in 2:num_itr){
-  average_susie_ann_w = all_susie_ann_w[[itr]] + average_susie_ann_w
-  for (g in 1:G){
-    average_susie_ann_pi[[g]] = all_susie_ann_pi[[itr]][[g]] + average_susie_ann_pi[[g]]
-    average_susie_ann_alpha[[g]] = all_susie_ann_alpha[[itr]][[g]] + average_susie_ann_alpha[[g]]
-    average_susie_pi[[g]] = all_susie_pi[[itr]][[g]] + average_susie_pi[[g]]
-    average_susie_alpha[[g]] = all_susie_alpha[[itr]][[g]] + average_susie_alpha[[g]]
-  }
-}
-average_susie_ann_w = average_susie_ann_w/num_itr
-for (g in 1:G){
-  average_susie_ann_pi[[g]] = average_susie_ann_pi[[g]]/num_itr
-  average_susie_ann_alpha[[g]] = average_susie_ann_alpha[[g]]/num_itr
-  average_susie_pi[[g]] = average_susie_pi[[g]]/num_itr
-  average_susie_alpha[[g]] = average_susie_alpha[[g]]/num_itr
-}
-
-print("Average SuSiE Ann Pi:")
-print(average_susie_ann_pi)
-print("Average SuSiE Ann w:")
-print(average_susie_ann_w)
-print("Average SuSiE Ann Alpha:")
-print(average_susie_ann_alpha)
-print("Average SuSIE Pi:")
-print(average_susie_pi)
-print("Average SuSiE Alpha:")
-print(average_susie_alpha)
-print(res$w)
-print(res$final_pi)
-```
-
-
-
-
-
-```{r}
-#Motivating Example for Figure 2 in FOGM project report: 
-#p=4, K=2, changing G (num loci) from 1 to 6
-G <- 3
-num_itr <- 20
-opt_itr <- 5
-all_susie_ann_alpha <- list()
-all_susie_ann_pi <- list()
-all_susie_ann_w <- list()
-all_susie_pi <- list()
-all_susie_alpha <- list()
-for (itr in 1:num_itr){
-  synth_data<-contrived_example(10, G)
-  print(synth_data$A_lst)
+print("Synthetic data A_Lst:")
+print(synth_data$A_lst)
+for (optim_method in c("SGD", "L-BFGS-B", "Adam")){
+  print("Now using optimization method:")
+  print(optim_method)
   res <- susie_ann(synth_data$susie_ann_X,synth_data$susie_ann_Y, synth_data$A_lst, G, FALSE, G,
-                  L = 1, scaled_prior_variance=1.0, susie_ann_opt_itr=opt_itr, elbo_optim_method="L-BFGS")
+                  L = 1, scaled_prior_variance=1.0, susie_ann_opt_itr=alt_opt_itr, elbo_optim_method=optim_method)
   all_susie_ann_pi[[itr]] <- res$final_pi
   all_susie_ann_w[[itr]] <- res$w
   all_susie_results <- res$raw_susie_results
@@ -118,11 +38,53 @@ for (itr in 1:num_itr){
   all_susie_alpha[[itr]] <- locus_susie_alpha
   all_susie_ann_alpha[[itr]] <- locus_susie_ann_alpha
 }
+
+```
+
+
+```{r}
+#Comparing opt. model from first and fifth iterations: what's changing?
+#First doing 1 alt opt iteration
+num_itr <- 20
+all_synth_data <- list()
+for (itr in 1:num_itr){
+  all_synth_data[[itr]] <- contrived_example(10, G)
+}
+print("Data A_lst")
+print(all_synth_data[[1]]$A_lst)
+G <- 6
+all_susie_ann_alpha <- list()
+all_susie_ann_pi <- list()
+all_susie_ann_w <- list()
+all_susie_pi <- list()
+all_susie_alpha <- list()
+for (itr in 1:num_itr){
+  synth_data<-all_synth_data[[itr]]
+  res <- susie_ann(synth_data$susie_ann_X,synth_data$susie_ann_Y, synth_data$A_lst, G, FALSE, G,
+                  L = 1, scaled_prior_variance=1.0, susie_ann_opt_itr=1, elbo_optim_method="L-BFGS-B")
+  all_susie_ann_pi[[itr]] <- res$final_pi
+  all_susie_ann_w[[itr]] <- res$w
+  all_susie_results <- res$raw_susie_results
+  locus_susie_pi <- list()
+  locus_susie_alpha <- list()
+  locus_susie_ann_alpha <- list()
+  for (g in 1:G){
+    locus_susie_pi[[g]] <- all_susie_results[[g]]$pi
+    locus_susie_alpha[[g]] <- all_susie_results[[g]]$alpha
+    locus_susie_ann_alpha[[g]] <- res$susie_models[[g]]$alpha
+  }
+  all_susie_pi[[itr]] <- locus_susie_pi
+  all_susie_alpha[[itr]] <- locus_susie_alpha
+  all_susie_ann_alpha[[itr]] <- locus_susie_ann_alpha
+}
+
 average_susie_ann_pi <- all_susie_ann_pi[[1]]
 average_susie_ann_w <- all_susie_ann_w[[1]]
 average_susie_ann_alpha <- all_susie_ann_alpha[[1]]
 average_susie_pi <- all_susie_pi[[1]]
 average_susie_alpha <- all_susie_alpha[[1]]
+
+
 for (itr in 2:num_itr){
   average_susie_ann_w = all_susie_ann_w[[itr]] + average_susie_ann_w
   for (g in 1:G){
@@ -139,6 +101,80 @@ for (g in 1:G){
   average_susie_pi[[g]] = average_susie_pi[[g]]/num_itr
   average_susie_alpha[[g]] = average_susie_alpha[[g]]/num_itr
 }
+
+print("Average SuSiE Ann Pi:")
+print(average_susie_ann_pi)
+print("Average SuSiE Ann w:")
+print(average_susie_ann_w)
+print("Average SuSiE Ann Alpha:")
+print(average_susie_ann_alpha)
+print("Average SuSIE Pi:")
+print(average_susie_pi)
+print("Average SuSiE Alpha:")
+print(average_susie_alpha)
+```
+
+
+```{r}
+#Comparing opt. model from first and fifth iterations: what's changing?
+#First doing 10 alt opt iteration
+num_itr <- 20
+all_synth_data <- list()
+for (itr in 1:num_itr){
+  all_synth_data[[itr]] <- contrived_example(10, G)
+}
+print("Data A_lst")
+print(all_synth_data[[1]]$A_lst)
+G <- 6
+all_susie_ann_alpha <- list()
+all_susie_ann_pi <- list()
+all_susie_ann_w <- list()
+all_susie_pi <- list()
+all_susie_alpha <- list()
+for (itr in 1:num_itr){
+  synth_data<-all_synth_data[[itr]]
+  res <- susie_ann(synth_data$susie_ann_X,synth_data$susie_ann_Y, synth_data$A_lst, G, FALSE, G,
+                  L = 1, scaled_prior_variance=1.0, susie_ann_opt_itr=1, elbo_optim_method="L-BFGS-B")
+  all_susie_ann_pi[[itr]] <- res$final_pi
+  all_susie_ann_w[[itr]] <- res$w
+  all_susie_results <- res$raw_susie_results
+  locus_susie_pi <- list()
+  locus_susie_alpha <- list()
+  locus_susie_ann_alpha <- list()
+  for (g in 1:G){
+    locus_susie_pi[[g]] <- all_susie_results[[g]]$pi
+    locus_susie_alpha[[g]] <- all_susie_results[[g]]$alpha
+    locus_susie_ann_alpha[[g]] <- res$susie_models[[g]]$alpha
+  }
+  all_susie_pi[[itr]] <- locus_susie_pi
+  all_susie_alpha[[itr]] <- locus_susie_alpha
+  all_susie_ann_alpha[[itr]] <- locus_susie_ann_alpha
+}
+
+average_susie_ann_pi <- all_susie_ann_pi[[1]]
+average_susie_ann_w <- all_susie_ann_w[[1]]
+average_susie_ann_alpha <- all_susie_ann_alpha[[1]]
+average_susie_pi <- all_susie_pi[[1]]
+average_susie_alpha <- all_susie_alpha[[1]]
+
+
+for (itr in 2:num_itr){
+  average_susie_ann_w = all_susie_ann_w[[itr]] + average_susie_ann_w
+  for (g in 1:G){
+    average_susie_ann_pi[[g]] = all_susie_ann_pi[[itr]][[g]] + average_susie_ann_pi[[g]]
+    average_susie_ann_alpha[[g]] = all_susie_ann_alpha[[itr]][[g]] + average_susie_ann_alpha[[g]]
+    average_susie_pi[[g]] = all_susie_pi[[itr]][[g]] + average_susie_pi[[g]]
+    average_susie_alpha[[g]] = all_susie_alpha[[itr]][[g]] + average_susie_alpha[[g]]
+  }
+}
+average_susie_ann_w = average_susie_ann_w/num_itr
+for (g in 1:G){
+  average_susie_ann_pi[[g]] = average_susie_ann_pi[[g]]/num_itr
+  average_susie_ann_alpha[[g]] = average_susie_ann_alpha[[g]]/num_itr
+  average_susie_pi[[g]] = average_susie_pi[[g]]/num_itr
+  average_susie_alpha[[g]] = average_susie_alpha[[g]]/num_itr
+}
+
 print("Average SuSiE Ann Pi:")
 print(average_susie_ann_pi)
 print("Average SuSiE Ann w:")
@@ -153,34 +189,5 @@ print(average_susie_alpha)
 
 
 
-```{r setup, include=FALSE}
-#Tunable example examining SuSiE-Ann effectiveness based on (n, G, annot_sparsity)
-#Scales up the evaluation of SuSiE-Ann from the above small-scale example and enables
-#investigation of dependence on annot_sparsity and n.
-G <- 50
-synth_data <- motivating_example(10, G, 0.5)
-true_pi <- synth_data$pi
-res <- susie_ann(synth_data$susie_ann_X,synth_data$susie_ann_Y, synth_data$A_lst, G, FALSE, G,
-                  L = 1, scaled_prior_variance=1.0, susie_ann_opt_itr=1)
 
-print("-------------Printing results------------")
-
-susie_ann_pi <- res$final_pi
-
-all_susie_results <- res$raw_susie_results
-all_susie_pi <- list()
-all_susie_ann_alpha <- list()
-for (g in 1:G){
-  all_susie_pi[[g]] <- all_susie_results[[g]]$pi
-  all_susie_alpha[[g]] <- all_susie_results[[g]]$alpha
-  all_susie_ann_alpha[[g]] <- res$susie_models[[g]]$alpha
-}
-
-print(true_pi)
-print(susie_ann_pi)
-print(all_susie_ann_alpha)
-print(all_susie_pi)
-print(all_susie_alpha)
-#print(synth_data$A_lst)
-```
 

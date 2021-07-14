@@ -1,0 +1,114 @@
+---
+title: "Synthetic_Exp"
+author: "Udai"
+date: "3/23/2021"
+output: html_document
+---
+
+```{r}
+#Comparing ELBO over course of optimization for the 3 optimization methods
+#for motivating example (presented 3/23)
+G <- 6
+alt_opt_itr <- 5
+all_susie_ann_alpha <- list()
+all_susie_ann_pi <- list()
+all_susie_ann_w <- list()
+all_susie_pi <- list()
+all_susie_alpha <- list()
+synth_data<-contrived_example(10, G)
+itr <- 1
+print("Synthetic data A_Lst:")
+print(synth_data$A_lst)
+print("Synthetic data selected variables:")
+print(synth_data$selected_variables)
+for (optim_method in c("Adam", "L-BFGS-B", "SGD")){
+  print("Now using optimization method:")
+  print(optim_method)
+  for (regul_type in c("None", "L1", "L2")){
+    print("Now using regularization method:")
+    print(regul_type)
+    res <- susie_ann(synth_data$susie_ann_X,synth_data$susie_ann_Y, synth_data$A_lst, G, FALSE, G,
+                    L = 1, scaled_prior_variance=1.0, susie_ann_opt_itr=alt_opt_itr, elbo_optim_method=optim_method, 
+                    reg_type=regul_type)
+    all_susie_ann_pi[[itr]] <- res$final_pi
+    all_susie_ann_w[[itr]] <- res$w
+    susie_models <- res$susie_models
+    for (g in 1:G)
+      print(res$susie_models[[g]]$alpha)
+    all_susie_results <- res$raw_susie_results
+    locus_susie_pi <- list()
+    locus_susie_alpha <- list()
+    locus_susie_ann_alpha <- list()
+    for (g in 1:G){
+      locus_susie_pi[[g]] <- all_susie_results[[g]]$pi
+      locus_susie_alpha[[g]] <- all_susie_results[[g]]$alpha
+      locus_susie_ann_alpha[[g]] <- res$susie_models[[g]]$alpha
+    }
+    all_susie_pi[[itr]] <- locus_susie_pi
+    all_susie_alpha[[itr]] <- locus_susie_alpha
+    all_susie_ann_alpha[[itr]] <- locus_susie_ann_alpha
+    
+    print("susie alpha")
+    print(locus_susie_alpha)
+    #itr = itr + 1
+  }
+}
+```
+
+## Synthetic Experiment Grid search
+```{r}
+y1=synth_data$susie_ann_Y[[1]]
+dim(y1)
+```
+
+
+
+```{r cars}
+#generate_synthetic_data <- function(pve, n, p, L, num_loci, num_annotations)
+library(rootSolve)
+library(faux)
+library(LaplacesDemon)
+library(clusterGeneration)
+library(SimDesign)
+library(matrixStats)
+PVE <- 0.6
+n <- 50
+p <- 500
+L <- 1
+G <- 750
+K <- 10
+
+
+
+#num_loci <- G
+#synth_data <- generate_synthetic_data(PVE, n, p, L, G, K)
+#susie_ann_X <- list()
+#susie_ann_Y <- list()
+#for (loc in 1:G){
+#  susie_ann_X[[loc]] <- synth_data$output[[loc]]$X
+#  susie_ann_Y[[loc]] <- synth_data$output[[loc]]$Y
+#}
+#synth_A = synth_data$A
+#res <- susie_ann(susie_ann_X, susie_ann_Y, synth_A, G, FALSE, 50, L=l, susie_ann_opt_itr = 5,
+#                       elbo_optim_method="L-BFGS-B", elbo_opt_steps_per_itr = 10)
+
+print(cor(res$w, synth_data$w))
+analyze_susie_ann_fit(res, synth_data)
+
+fname <- ".Rdata"
+fname = paste("synth_1", fname, sep="")
+fname = paste("~/SuSiE-Ann/", fname)
+print(fname)
+save(res, file=fname)
+
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure}
+res = load("~/SuSiE-Ann/synth_1.Rdata")
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
