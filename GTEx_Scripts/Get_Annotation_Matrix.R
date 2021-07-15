@@ -49,8 +49,10 @@ for (loc_num in 1:num_loci){
   locus_chr <- locus_SNP_loc[[1]][1]
   #Obtaining peak annotations: for each RBP, annotation=1[SNP in peak for each HepG2 RBP]
   rbp_index <- 1
+  print("Starting RBP annotations")
   for (rbp in unique_rbps){
     rbp_fname_prefix <- paste(peak_fname, rbp, sep="")
+    #Obtaining RBP peaks from get_peak_list.R
     peak_start_pos_by_chrom <- readRDS(paste(rbp_fname_prefix,"_peak_sorted_start_pos_by_chrom.txt", sep=""))[[locus_chr]]
     peak_stop_pos_by_chrom <- readRDS(paste(rbp_fname_prefix,"_peak_sorted_stop_pos_by_chrom.txt", sep=""))[[locus_chr]]
     max_peak_len  <- max_peak_len_lst[[rbp]][[locus_chr]]
@@ -80,8 +82,25 @@ for (loc_num in 1:num_loci){
   # Obtaining two annotations specifying whether SNP is in an exon vs. intron vs. intergenic: 
   # Annotation 1: 1[SNP within gene boundaries]
   # Annotation 2: 1[SNP within exon]
+  print("Starting exon vs. intron vs. intergenic")
+  chr_gene_bdry_range <- gene_bdry_ind_by_chr[[locus_chr]]
+  chr_exon_bdry_range <- exon_bdry_ind_by_chr[[locus_chr]]
+  for (SNP_ind in (1:length(locus_SNP_loc))){
+    SNP_loc <- locus_SNP_loc[[SNP_ind]]
+    SNP_pos <- strtoi(SNP_loc[2])
+    for (gene_bdry_ind in chr_gene_bdry_range[1]:chr_gene_bdry_range[2]){
+      if (SNP_pos >= gene_boundary_start[gene_bdry_ind] && SNP_pos <= gene_boundary_end[gene_bdry_ind]){
+        locus_annotations[length(unique_rbps)+1,SNP_ind] = 1
+      }
+    }
+    for (exon_bdry_ind in chr_exon_bdry_range[1]:chr_exon_bdry_range[2]){
+      if (SNP_pos >= exon_boundary_start[exon_bdry_ind] && SNP_pos <= exon_boundary_end[exon_bdry_ind]){
+        locus_annotations[length(unique_rbps)+2,SNP_ind] = 1
+      }
+    }
+  }
 }
-#Obtaining RBP peaks from get_peak_list.R
+
 # 
 # all_peak_chrom_lst <- read.table(file =  paste(peak_fname, "peak_chrom_lst.txt", sep=""), sep = "\t")
 # all_peak_start_lst <- read.table(file =  paste(peak_fname, "peak_start_lst.txt", sep=""), sep = "\t")
