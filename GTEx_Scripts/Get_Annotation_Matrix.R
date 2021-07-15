@@ -4,8 +4,7 @@ unique_rbps <- sub("\n", "",unlist(read.table(file =  paste(peak_fname, "unique_
 #Obtaining max (peak end pos - peak start pos) for each RBP and chromosome
 #This information expedites identifying if SNPs are in RBP peaks
 max_peak_len_lst <- list()
-for (rbp in c("UPF1", "UTP18", "WDR43")){
-#for (rbp in unique_rbps){
+for (rbp in unique_rbps){
   max_peak_len_lst[[rbp]] <- list()
   rbp_fname_prefix <- paste(peak_fname, rbp, sep="")
   peak_start_pos_by_chrom <- readRDS(paste(rbp_fname_prefix,"_peak_sorted_start_pos_by_chrom.txt", sep=""))
@@ -14,7 +13,33 @@ for (rbp in c("UPF1", "UTP18", "WDR43")){
     max_peak_len_lst[[rbp]][[chr]] <- max(peak_stop_pos_by_chrom[[chr]] - peak_start_pos_by_chrom[[chr]])
   }
 }
-#Obtaining peak annotations: for each RBP, annotation=1[SNP in peak for each HepG2 RBP]
+
+# Loading files for exon vs. intron vs. intergenic annotations
+gene_boundaries <-  read.table(gzfile("/gpfs/commons/groups/knowles_lab/index/hg38/genes.tsv.gz"), header=TRUE)[,1:3]
+gene_boundary_chr <- sub("\n", "", gene_boundaries[,1])
+gene_boundary_start <- sub("\n", "", gene_boundaries[,2])
+gene_boundary_end <- sub("\n", "", gene_boundaries[,3])
+exon_boundaries <- read.table(gzfile("/gpfs/commons/groups/knowles_lab/index/hg38/gencode.v30.exons.txt.gz"), header=TRUE)[,1:3]
+exon_boundary_chr <- sub("\n", "", exon_boundaries[,1])
+exon_boundary_start <-  sub("\n", "", exon_boundaries[,2])
+exon_boundary_end <-  sub("\n", "", exon_boundaries[,3])
+
+#Storing index of first & last gene/exon boundaries corresponding to each chromosome
+#To expedite obtaining exon vs. intron vs. intergenic annotations below
+gene_bdry_ind_by_chr <- list()
+exon_bdry_ind_by_chr <- list()
+unique_gene_bdry_chr <- unique(gene_boundary_chr)
+unique_exon_bdry_chr <- unique(exon_boundary_chr)
+rev_gene_boundary_chr <- rev(gene_boundary_chr)
+for (gene_bdry_chr in unique_gene_bdry_chr){
+  gene_bdry_ind_by_chr[[gene_bdry_chr]] <- c(match(gene_bdry_chr,gene_boundary_chr), length(gene_boundary_chr)+1-match(gene_bdry_chr,rev_gene_boundary_chr))
+}
+rev_exon_boundary_chr <- rev(exon_boundary_chr)
+for (exon_bdry_chr in unique_exon_bdry_chr){
+  exon_bdry_ind_by_chr[[exon_bdry_chr]] <- c(match(exon_bdry_chr,exon_boundary_chr),length(exon_boundary_chr)+1-match(exon_bdry_chr,rev_exon_boundary_chr))
+}
+
+#Obtaining annotation matrices
 for (loc_num in 1:num_loci){
   geno_filename <- paste("/gpfs/commons/home/unagpal/SuSiE-Ann/Real_Data_Exp/Data_Processing/Genotype_Matrices/X", loc_num, sep="_")
   geno_filename <- paste(geno_filename, ".txt", sep="")
@@ -22,9 +47,9 @@ for (loc_num in 1:num_loci){
   locus_SNP_loc <- strsplit(colnames(X_g), "_")
   locus_annotations <- matrix(0, 2+length(unique_rbps), length(locus_SNP_loc))
   locus_chr <- locus_SNP_loc[[1]][1]
+  #Obtaining peak annotations: for each RBP, annotation=1[SNP in peak for each HepG2 RBP]
   rbp_index <- 1
-  for (rbp in c("UPF1", "UTP18", "WDR43")){
-  #for (rbp in unique_rbps){
+  for (rbp in unique_rbps){
     rbp_fname_prefix <- paste(peak_fname, rbp, sep="")
     peak_start_pos_by_chrom <- readRDS(paste(rbp_fname_prefix,"_peak_sorted_start_pos_by_chrom.txt", sep=""))[[locus_chr]]
     peak_stop_pos_by_chrom <- readRDS(paste(rbp_fname_prefix,"_peak_sorted_stop_pos_by_chrom.txt", sep=""))[[locus_chr]]
@@ -52,8 +77,10 @@ for (loc_num in 1:num_loci){
     }
     rbp_index = rbp_index + 1
   }
+  # Obtaining two annotations specifying whether SNP is in an exon vs. intron vs. intergenic: 
+  # Annotation 1: 1[SNP within gene boundaries]
+  # Annotation 2: 1[SNP within exon]
 }
-print(locus_annotations)
 #Obtaining RBP peaks from get_peak_list.R
 # 
 # all_peak_chrom_lst <- read.table(file =  paste(peak_fname, "peak_chrom_lst.txt", sep=""), sep = "\t")
