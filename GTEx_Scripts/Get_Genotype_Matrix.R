@@ -1,5 +1,5 @@
-source("~/SuSiE-Ann/Real_Data_Exp/get_cis_geno.R")
-source("~/SuSiE-Ann/Real_Data_Exp/easy_impute.R")
+source("~/SuSiE-Ann/susieR/GTEx_Scripts/get_cis_geno.R")
+source("~/SuSiE-Ann/susieR/GTEx_Scripts/easy_impute.R")
 
 #Obtain Donor IDs of HepG2 Individuals (some code from https://github.com/broadinstitute/gtex-tutorials/blob/master/GTEx_data_tutorial_R.ipynb)
 sample.df <- read.delim("/gpfs/commons/datasets/controlled/GTEx/dbgap_restricted/data/gtex/exchange/GTEx_phs000424/exchange/analysis_releases/GTEx_Analysis_2017-06-05_v8/sample_annotations/GTEx_Analysis_2017-06-05_v8_Annotations_SampleAttributesDS.txt",
@@ -16,11 +16,8 @@ liver_sqtl_introns <- strsplit(liver_sqtl_introns, ":") #11049 introns/junctions
 #Obtain genotype for each intron/junction with significant sQTLs
 tab = TabixFile("/gpfs/commons/datasets/controlled/GTEx/dbgap_restricted/data/gtex/exchange/GTEx_phs000424/exchange/analysis_releases/GTEx_Analysis_2017-06-05_v8/genotypes/WGS/variant_calls/GTEx_Analysis_2017-06-05_v8_WholeGenomeSeq_838Indiv_Analysis_Freeze.SHAPEIT2_phased.MAF01.vcf.gz",
                 "/gpfs/commons/datasets/controlled/GTEx/dbgap_restricted/data/gtex/exchange/GTEx_phs000424/exchange/analysis_releases/GTEx_Analysis_2017-06-05_v8/genotypes/WGS/variant_calls/GTEx_Analysis_2017-06-05_v8_WholeGenomeSeq_838Indiv_Analysis_Freeze.SHAPEIT2_phased.MAF01.vcf.gz.tbi")
-#TEMPORARILY SETTING WINDOW_DIST LOW FOR TESTING PURPOSES
-window_dist <- 10e3
-#SHOULD BE: window_dist <- 1e5
-#for (locus_ind in 1:length(liver_sqtl_introns)){
-for (locus_ind in 3137:length(liver_sqtl_introns)){
+window_dist <- 10e5
+for (locus_ind in 1:length(liver_sqtl_introns)){
   sqtl_intron <- liver_sqtl_introns[[locus_ind]]
   locus_chr <- sqtl_intron[1]
   start_pos <- max(strtoi(sqtl_intron[2])-window_dist, 0)
@@ -33,6 +30,7 @@ for (locus_ind in 3137:length(liver_sqtl_introns)){
   filename <- paste("/gpfs/commons/home/unagpal/SuSiE-Ann/Real_Data_Exp/Data_Processing/Genotype_Matrices/X", locus_ind, sep="_")
   filename <- paste(filename, ".txt", sep="")
   #dim (liver_geno_matrix) = [# liver samples = 208] x [# SNPs]
+  print(locus_ind)
   print(dim(liver_geno_matrix))
   write.table(liver_geno_matrix, file = filename, sep = "\t")
 }
